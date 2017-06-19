@@ -199,30 +199,21 @@ class Crystal(AtomicStructure, Lattice):
 		b1,b2,b3 = self.reciprocal_vectors
 		return int(h)*b1 + int(k)*b2 + int(l)*b3
 	
-	def miller_indices(self, G):
+	def miller_indices(self, Gx, Gy, Gz):
 		"""
 		Returns the miller indices associated with a scattering vector.
         
 		Parameters
 		----------
-		G : array-like, shape (3,)
+		G : array-like, shape (N,3)
 			Scattering vector.
         
 		Returns
 		-------
-		hkl : ndarray, shape (3,), dtype int
+		hkl : ndarray, shape (3,N), dtype int
 			Miller indices [h, k, l].
 		"""
-		G = np.asarray(G, dtype = np.float)
-	
-		# Transformation matric between reciprocal space and miller indices
-		# TODO: refactor to use skued.change_of_basis
-		matrix_trans = np.empty(shape = (3,3), dtype = np.float)
-		for i in range(len(self.reciprocal_vectors)):
-			matrix_trans[:,i] = self.reciprocal_vectors[i]
-
-		matrix_trans = np.linalg.inv(matrix_trans)
-		return transform(matrix_trans, G).astype(np.int)
+		return change_basis_mesh(Gx, Gy, Gz, basis1 = np.eye(3), basis2 = self.reciprocal_vectors)
 	
 	def structure_factor_miller(self, h, k, l):
 		"""

@@ -7,8 +7,7 @@ from .. import Crystal, Atom, Lattice, graphite
 from ... import rotation_matrix, transform
 import unittest
 
-# large test crystal
-#br = Crystal.from_pdb('1fbb')
+# TODO: choose three or four crystals from CIFs
 
 class TestBoundedReflections(unittest.TestCase):
 
@@ -33,6 +32,22 @@ class TestBoundedReflections(unittest.TestCase):
 		Gx, Gy, Gz = self.crystal.scattering_vector(*self.crystal.bounded_reflections(nG = bound))
 		norm_G = np.sqrt(Gx**2 + Gy**2 + Gz**2)
 		self.assertTrue(np.all(norm_G <= bound))
+    
+class TestScatteringVectorsManipulations(unittest.TestCase):
+
+    def setUp(self):
+        self.crystal = deepcopy(graphite)
+
+    def test_miller_indices_back_and_forth(self):
+        """ Test that the output of Crystal.miller_indices and 
+        Crystal.scattering_vector are compatible """
+        h, k, l = self.crystal.bounded_reflections(4*np.pi)
+        Gx, Gy, Gz = self.crystal.scattering_vector(h, k, l)
+        h2, k2, l2 = self.crystal.miller_indices(Gx, Gy, Gz)
+
+        self.assertTrue(np.allclose(h, h2))
+        self.assertTrue(np.allclose(k, k2))
+        self.assertTrue(np.allclose(l, l2))
 
 class TestCrystalRotations(unittest.TestCase):
 

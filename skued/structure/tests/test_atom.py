@@ -6,7 +6,8 @@ import unittest
 
 seed(23)
 
-ELEMENTS = list(atomic_number.keys())
+# No scattering parameters for Z > 103
+ELEMENTS = [key for key in atomic_number.keys() if atomic_number[key] < 104]
 
 class TestAtom(unittest.TestCase):
     
