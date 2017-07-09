@@ -28,6 +28,10 @@ Affine Transforms
 =================
 .. automodule:: skued.affine
 
+Numerical Laplace Transform
+===========================
+.. autofunction:: skued.laplace.laplace
+
 Structure
 =========
 .. autoclass:: skued.structure.atom.Atom
