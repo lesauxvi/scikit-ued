@@ -5,13 +5,13 @@ Diffraction simulation
 """
 from itertools import chain, repeat
 import numpy as np
-from math import ceil, atan
+from math import ceil, atan, floor
 from scipy.fftpack import fftfreq, fftshift
 from scipy.interpolate import RegularGridInterpolator
 from warnings import warn
 
 from . import pelectrostatic
-from .. import interaction_parameter, electron_wavelength
+from .. import interaction_parameter, electron_wavelength, repeated_array
 
 FFTOPS = {}
 try:
@@ -59,7 +59,7 @@ def wdiffsim(crystal, energy, initial_wavefunction = None, resolution = (2048, 2
     horz_semiangle_max = atan( (resolution[1] * pixel_width / 2) / camera_distance)
     max_k = max(vert_semiangle_max/wavelength, horz_semiangle_max/wavelength)
 
-    X, Y, KX, KY = sim_mesh(crystal, resolution = resolution, max_k = max_k)
+    X, Y = sim_mesh(crystal, resolution = resolution, max_k = max_k)
     if initial_wavefunction is None:
         initial_wavefunction = np.ones_like(X, dtype = np.complex)
 
@@ -96,10 +96,10 @@ def weak_phase(crystal, energy, initial_wavefunction = None, **kwargs):
     exit_wave : `~numpy.ndarray`, ndim 2, dtype complex
         Scattered electron wavefunction
     """
-    X, Y, *_ = sim_mesh(crystal, **kwargs)
+    X, Y = sim_mesh(crystal, **kwargs)
 
     if initial_wavefunction is None:
-        initial_wavefunction = np.ones_like(X, dtype = np.complex)
+        initial_wavefunction = np.ones_like(X)
     
     return initial_wavefunction * np.exp(1j * interaction_parameter(energy) * pelectrostatic(crystal, X, Y))
 
@@ -167,6 +167,10 @@ def multislice(crystal, energy, initial_wavefunction = None, diagnostic = dict()
     
     return wavefunction
 
+
+def nextpow2(x):
+    return 1 << (x - 1).bit_length()
+
 def sim_mesh(crystal, resolution = (1024, 1024), max_k = 12):
     """
     Generate real-space and frequency-space meshgrids on which to calculate
@@ -174,6 +178,8 @@ def sim_mesh(crystal, resolution = (1024, 1024), max_k = 12):
 
     Based on the input parameters, the meshgrids' size and spacing will be adjusted
     to minimize artifacts.
+    
+    This function is not meant to be called directly.
 
     Parameters
     ----------
@@ -187,10 +193,7 @@ def sim_mesh(crystal, resolution = (1024, 1024), max_k = 12):
     
     Returns
     -------
-    X, Y : ndarray
-        Real-space meshes
-    KX, KY : ndarray
-        Frequency-space meshes
+    X, Y : ndarray, ndim 2
     """
     if resolution[0] != resolution[1]:
         raise NotImplementedError
@@ -203,34 +206,31 @@ def sim_mesh(crystal, resolution = (1024, 1024), max_k = 12):
     k_extent = np.linspace(-max_k, max_k, num = resolution[0])
     dk = k_extent[1] - k_extent[0]
 
-    # Round real space sampling to periodicity of the lattice
-    # when projected onto the x-y plane
-    # WARNING: spacing in both x and y must divide a unit cell perfectly
-    # Otherwise, beating frequencies will appear as artifacts.
+    # There are three restrictions to consider:
+    # 1. Mesh must be divided perfectly by periodicity of the lattice
+    # 2. Mesh spacing must divide the periodicity of the lattice perfectly
+    # 3. Mesh spacing & mesh size must respect maximal dimensions
     max_dim = np.abs(fftfreq(len(k_extent), dk)).max()
     per_x, per_y, _ = crystal.periodicity
-    x_max = ceil(max_dim/per_x) * per_x
-    y_max = ceil(max_dim/per_y) * per_y
+    x_max = ceil(2*max_dim/per_x) * per_x / 2
+    y_max = ceil(2*max_dim/per_y) * per_y / 2
 
-    # Resolution is adjusted so that dx and dy divide per_x and per_y exactly
-    # That sets the frequency range, but the frequency spacing must be also correct
-    # This is done by ensuring that per_x * dx perfectly divides res_x, and same
-    # for res_y
-    res_x, res_y = resolution                 # initial guess
-    dx, dy = 2*x_max / res_x, 2*y_max / res_y # initial guess
+    res_x, res_y = resolution
+    dx = 2*x_max / res_x
+    dy = 2*y_max / res_y
 
-    dx, dy = per_x/ceil(per_x / dx), per_y/ceil(per_y / dy)
+    # Determine the factor by which to increase the resolution
+    res_x = ceil(per_x / dx) * (2*x_max / per_x)
+    res_y = ceil(per_y / dy) * (2*y_max / per_y)
+    dx = 2*x_max / res_x
+    dy = 2*y_max / res_y
 
-    # res = # number of unit cells * size of unit cells [px]
-    res_x = ceil(res_x * dx / per_x) * (per_x / dx)
-    res_y = ceil(res_y * dy / per_y) * (per_y / dy)
-
-    # Recalculate x_max and y_max from the new resolution
-    X, Y = np.meshgrid( np.arange(0, (res_x + 1) * dx, step = dx),
-                        np.arange(0, (res_y + 1) * dy, step = dy))
+    return np.meshgrid( np.arange(0, (res_x) * dx, step = dx),
+                        np.arange(0, (res_y) * dy, step = dy))
+    
+    #subX = np.array(X[0:int(per_y/dy), 0:int(per_x/dx)])
+    #subY = np.array(Y[0:int(per_y/dy), 0:int(per_x/dx)])
 
     # Regenerate a spatial frequency sampling according to the real-space sampling
-    KX, KY = np.meshgrid( fftshift(fftfreq(X.shape[1], d = X[1,1] - X[0,0])), 
-                          fftshift(fftfreq(Y.shape[0], d = Y[1,1] - Y[0,0])) )
-
-    return X, Y, KX, KY
+    #KX, KY = np.meshgrid( fftshift(fftfreq(X.shape[1], d = X[1,1] - X[0,0])), 
+    #                      fftshift(fftfreq(Y.shape[0], d = Y[1,1] - Y[0,0])) )
