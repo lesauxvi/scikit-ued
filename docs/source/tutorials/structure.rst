@@ -169,32 +169,34 @@ In the above example, :data:`spg_info` is a dictionary with the following four k
 
 Scattering utilities
 --------------------
-:class:`Crystal` objects have a few methods that make life easier when dealing with scattering data and modeling.
+:class:`Lattice` objects have a few methods that make life easier when dealing with scattering data and modeling.
 
 The conversion between Miller indices and scattering vectors is available:: 
 
 	from skued.structure import graphite
 
+    # Behavior inherited from Lattice superclass
 	G = graphite.scattering_vector(1,0,0)
 	h, k, l = graphite.miller_indices(G) #1, 0, 0
 
-Arrays of Miller indices can be generated for all Miller indices that fall below a bound::
+Compatibility with ASE
+----------------------
+The `Atomic Simulation Environment <https://wiki.fysik.dtu.dk/ase/index.html>`_ is a powerful tool. You can harness its power and convert
+between :class:`ase.Atoms` and :class:`skued.Crystal` at will.
 
-	h, k, l = graphite.bounded_reflections(12) 	# All reflections below 12 Angs^-1
+To create an :class:`ase.Atoms` object from a :class:`Crystal`, use the :meth:`Crystal.ase_atoms` method::
 
-In this example, :data:`h`, :data:`k`, and :data:`l` are arrays of integers; each combined row is a reflection.
+	from ase.calculators.abinit import Abinit
+	from skued import Crystal
+	
+	gold = Crystal.from_database('Au')
+	ase_gold = gold.ase_atoms(calculator = Abinit(...))
 
-Static structure factor calculation is also possible, both for a single reflection and arrays of reflections::
+All keywords of the :class:`ase.Atoms` constructor are supported. To get back to a :class:`Crystal` instance::
 
-	import numpy as np
+	gold2 = Crystal.from_ase(ase_gold)
 
-	# For a single reflection
-	SF = graphite.structure_factor_miller(1, 0, 0)
-
-	# For an array of reflections: vectorized calculation
-	h, k, l = graphite.bounded_reflections(12)
-	SF = graphite.structure_factor_miller(h, k, l)
-	SF.shape == h.shape 	# True
+.. _atom:
 
 Compatibility with ASE
 ----------------------
@@ -240,36 +242,5 @@ The real-space position with respect to a :class:`Crystal` or :class:`Lattice` c
     carbon = list(graphite)[-1]
     fractional = carbon.coords
     real = carbon.xyz(lattice = graphite)
-
-One important feature of the :class:`Atom` class is the possibility to compute the electrostatic
-potential across meshes::
-
-	import numpy as np
-	import matplotlib.pyplot as plt
-
-	xx, yy = np.meshgrid(np.linspace(-0.3, 0.3, num = 100), 
-	                     np.linspace(-0.3, 0.3, num = 100))
-	dist = np.sqrt(xx**2 + yy**2)	# distance from the atom in Angstroms
-
-	es_potential = copper.potential(dist)
-	plt.imshow(es_potential)
-
-After plot formatting:
-
-.. plot::
-	
-	import numpy as np
-	import matplotlib.pyplot as plt
-	from skued.structure import Atom
-	copper = Atom(element = 'Cu', coords = [0,0,0])
-	xx, yy = np.meshgrid(np.linspace(-0.3, 0.3, num = 100), 
-						 np.linspace(-0.3, 0.3, num = 100))
-	dist = np.sqrt(xx**2 + yy**2)	# distance from the atom in Angstroms
-	es_potential = copper.potential(dist)
-	plt.title('Atomic potential of Cu (log-scale)')
-	plt.imshow(np.log(1 + es_potential), extent = [xx.min(), xx.max(), yy.min(), yy.max()])
-	plt.ylabel('x-direction ($\AA$)')
-	plt.xlabel('y-direction ($\AA$)')
-	plt.show()
 
 :ref:`Return to Top <structure_tutorial>`

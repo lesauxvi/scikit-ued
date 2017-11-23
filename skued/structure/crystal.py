@@ -1,28 +1,16 @@
 # -*- coding: utf-8 -*-
 import os
-from collections.abc import Iterable
 from copy import deepcopy as copy
 from functools import lru_cache
 from glob import glob
-from itertools import count, product, takewhile
-from tempfile import TemporaryDirectory
 from urllib.request import urlretrieve
-from warnings import warn
 
 import numpy as np
-from numpy import pi
-from numpy.linalg import norm
 from spglib import (get_error_message, get_spacegroup_type, 
                     get_symmetry_dataset, find_primitive)
 
 from . import Atom, CIFParser, Lattice, PDBParser
-from .. import (affine_map, change_basis_mesh, change_of_basis,
-                is_rotation_matrix, minimum_image_distance, transform)
-
-# Constants
-m = 9.109*10**(-31)     #electron mass in kg
-a0 = 0.5291             #in Angs
-e = 14.4                #electron charge in Volt*Angstrom
+from .. import affine_map
 
 CIF_ENTRIES = glob(os.path.join(os.path.dirname(__file__), 'cifs', '*.cif'))
 
@@ -54,7 +42,6 @@ def symmetry_expansion(atoms, symmetry_operators):
             new.coords[:] = np.mod(new.coords, 1)
             uniques.add(new)
     yield from uniques
-
 
 class Crystal(Lattice):
     """
@@ -130,9 +117,9 @@ class Crystal(Lattice):
                Computer Physics Communications 182, 1183-1186 (2011). doi: 10.1016/j.cpc.2011.01.013
         """
         with CIFParser(filename = path) as parser:
-            return Crystal(unitcell = symmetry_expansion(parser.atoms(), parser.symmetry_operators()),
-                           lattice_vectors = parser.lattice_vectors(),
-                           source = str(path))
+            return cls(unitcell = symmetry_expansion(parser.atoms(), parser.symmetry_operators()),
+                       lattice_vectors = parser.lattice_vectors(),
+                       source = str(path))
     
     @classmethod
     def from_database(cls, name):
@@ -205,9 +192,9 @@ class Crystal(Lattice):
             number is provided, files will always be overwritten. 
         """
         parser = PDBParser(ID = ID, download_dir = download_dir)
-        return Crystal(unitcell = symmetry_expansion(parser.atoms(), parser.symmetry_operators()),
-                       lattice_vectors = parser.lattice_vectors(),
-                       source = str(parser.file))
+        return cls(unitcell = symmetry_expansion(parser.atoms(), parser.symmetry_operators()),
+                   lattice_vectors = parser.lattice_vectors(),
+                   source = str(parser.file))
     
     @classmethod
     def from_ase(cls, atoms):
@@ -232,7 +219,7 @@ class Crystal(Lattice):
     def primitive(self, symprec = 1e-2):
         """ 
         Returns a Crystal object in the primitive unit cell.
-
+        
         Parameters
         ----------
         symprec : float, optional
@@ -356,165 +343,3 @@ class Crystal(Lattice):
         err_msg = get_error_message()
         if err_msg:
             raise RuntimeError('Symmetry-determination has returned the following error: {}'.format(err_msg))
-    
-    def scattering_vector(self, h, k, l):
-        """
-        Returns the scattering vector G from Miller indices.
-        
-        Parameters
-        ----------
-        h, k, l : int or ndarrays
-            Miller indices.
-        
-        Returns
-        -------
-        G : array-like
-            If `h`, `k`, `l` are integers, returns a single array of shape (3,)
-            If `h`, `k`, `l` are arrays, returns three arrays Gx, Gy, Gz
-        """
-        if isinstance(h, Iterable):
-            return change_basis_mesh(h, k, l, basis1 = self.reciprocal_vectors, basis2 = np.eye(3))
-
-        b1,b2,b3 = self.reciprocal_vectors
-        return int(h)*b1 + int(k)*b2 + int(l)*b3
-    
-    def miller_indices(self, G):
-        """
-        Returns the miller indices associated with a scattering vector.
-        
-        Parameters
-        ----------
-        G : array-like, shape (3,)
-            Scattering vector.
-        
-        Returns
-        -------
-        hkl : ndarray, shape (3,), dtype int
-            Miller indices [h, k, l].
-        """
-        G = np.asarray(G, dtype = np.float)
-    
-        # Transformation matric between reciprocal space and miller indices
-        # TODO: refactor to use skued.change_of_basis
-        matrix_trans = np.empty(shape = (3,3), dtype = np.float)
-        for i in range(len(self.reciprocal_vectors)):
-            matrix_trans[:,i] = self.reciprocal_vectors[i]
-
-        matrix_trans = np.linalg.inv(matrix_trans)
-        return transform(matrix_trans, G).astype(np.int)
-    
-    def structure_factor_miller(self, h, k, l):
-        """
-        Computation of the static structure factor from Miller indices.
-        
-        Parameters
-        ----------
-        h, k, l : array_likes or floats
-            Miller indices. Can be given in a few different formats:
-            
-            * floats : returns structure factor computed for a single scattering vector
-                
-            * list of 3 coordinate ndarrays, shapes (L,M,N) : returns structure factor computed over all coordinate space
-        
-        Returns
-        -------
-        sf : ndarray, dtype complex
-            Output is the same shape as h, k, or l.
-        
-        See also
-        --------
-        structure_factor
-            Vectorized structure factor calculation for general scattering vectors.	
-        """
-        return self.structure_factor(G = self.scattering_vector(h, k, l))
-        
-    def structure_factor(self, G):
-        """
-        Computation of the static structure factor. This function is meant for 
-        general scattering vectors, not Miller indices. 
-        
-        Parameters
-        ----------
-        G : array-like
-            Scattering vector. Can be given in a few different formats:
-            
-            * array-like of numericals, shape (3,): returns structure factor computed for a single scattering vector
-                
-            * list of 3 coordinate ndarrays, shapes (L,M,N): returns structure factor computed over all coordinate space
-            
-            WARNING: Scattering vector is not equivalent to the Miller indices.
-        
-        Returns
-        -------
-        sf : ndarray, dtype complex
-            Output is the same shape as input G[0]. Takes into account
-            the Debye-Waller effect.
-        
-        See also
-        --------
-        structure_factor_miller 
-            For structure factors calculated from Miller indices.
-                
-        Notes
-        -----
-        By convention, scattering vectors G are defined such that norm(G) = 4 pi s
-        """
-        # Distribute input
-        # This works whether G is a list of 3 numbers, a ndarray shape(3,) or 
-        # a list of meshgrid arrays.
-        Gx, Gy, Gz = G
-        nG = np.sqrt(Gx**2 + Gy**2 + Gz**2)
-        
-        # Separating the structure factor into sine and cosine parts avoids adding
-        # complex arrays together. About 3x speedup vs. using complex exponentials
-        SFsin, SFcos = np.zeros(shape = nG.shape, dtype = np.float), np.zeros(shape = nG.shape, dtype = np.float)
-
-        # Pre-allocation of form factors gives huge speedups
-        dwf = np.empty_like(SFsin) 	# debye-waller factor
-        atomff_dict = dict()
-        for atom in iter(self):
-            if atom.element not in atomff_dict:
-                atomff_dict[atom.element] = atom.electron_form_factor(nG)
-
-        for atom in iter(self): #TODO: implement in parallel?
-            x, y, z = atom.xyz(self)
-            arg = x*Gx + y*Gy + z*Gz
-            atom.debye_waller_factor((Gx, Gy, Gz), out = dwf)
-            atomff = atomff_dict[atom.element]
-            SFsin += atomff * dwf * np.sin(arg)
-            SFcos += atomff * dwf * np.cos(arg)
-        
-        return SFcos + 1j*SFsin
-    
-    def bounded_reflections(self, nG):
-        """
-        Returns iterable of reflections (hkl) with norm(G) < nG
-        
-        Parameters
-        ----------
-        nG : float
-            Maximal scattering vector norm. By our convention, norm(G) = 4 pi s.
-        
-        Returns
-        -------
-        h, k, l : ndarrays, shapes (N,), dtype int
-        """
-        if nG < 0:
-            raise ValueError('Bound {} is negative.'.format(nG))
-        
-        # Determine the maximum index such that (i00) family is still within data limits
-        #TODO: cache results based on max_index?
-        bounded = lambda i : any([norm(self.scattering_vector(i,0,0)) <= nG, 
-                                    norm(self.scattering_vector(0,i,0)) <= nG, 
-                                    norm(self.scattering_vector(0,0,i)) <= nG])
-        max_index = max(takewhile(bounded, count(0)))
-        extent = range(-max_index, max_index + 1)
-        h, k, l = np.split(np.array(list(product(extent, extent, extent)), dtype = np.int), 3, axis = -1)
-        h, k, l = h.ravel(), k.ravel(), l.ravel()
-
-        # we only have an upper bound on possible reflections
-        # Let's filter down
-        Gx, Gy, Gz = self.scattering_vector(h, k, l)
-        norm_G = np.sqrt(Gx**2 + Gy**2 + Gz**2)
-        in_bound = norm_G <= nG
-        return h.compress(in_bound), k.compress(in_bound), l.compress(in_bound)
