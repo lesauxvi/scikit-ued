@@ -4,14 +4,15 @@ Diffraction simulation
 ======================
 """
 from itertools import chain, repeat
-import numpy as np
-from math import ceil, atan, floor
-from scipy.fftpack import fftfreq, fftshift
-from scipy.interpolate import RegularGridInterpolator
+from math import atan, ceil, floor
 from warnings import warn
 
-from . import pelectrostatic
-from .. import interaction_parameter, electron_wavelength, repeated_array
+import numpy as np
+from scipy.fftpack import fftfreq, fftshift
+from scipy.interpolate import RegularGridInterpolator
+
+from .. import electron_wavelength, interaction_parameter, repeated_array
+from .potential import pelectrostatic
 
 FFTOPS = {}
 try:
