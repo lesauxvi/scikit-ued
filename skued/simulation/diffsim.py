@@ -38,8 +38,8 @@ def wdiffsim(crystal, energy, initial_wavefunction = None, resolution = (2048, 2
 
     Parameters
     ----------
-    crystal : Crystal
-
+    crystal : skued.Crystal
+        Crystal to diffracted
     energy : float
         Electron energy [keV]
     initial_wavefunction : `~numpy.ndarray` or None, optional
@@ -51,6 +51,11 @@ def wdiffsim(crystal, energy, initial_wavefunction = None, resolution = (2048, 2
         Camera-to-sample distance [m]
     pixel_width : float, optional
         Pixel size [m].
+    
+    Returns
+    -------
+    diffracted : `~numpy.ndarray`
+        Diffracted intensity.
     """
     final_resolution = resolution
     wavelength = electron_wavelength(energy)
