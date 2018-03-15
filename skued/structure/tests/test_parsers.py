@@ -6,7 +6,7 @@ from warnings import filterwarnings
 
 import numpy as np
 
-from .. import Crystal, graphite
+from .. import Crystal
 from ... import transform
 from ..cif_parser import CIFParser
 from ..pdb_parser import PDBParser
@@ -16,21 +16,20 @@ filterwarnings('ignore', category = UserWarning)
 
 class TestPDBParser(unittest.TestCase):
 
-    def setUp(self):
-        self.parser = PDBParser('1fbb', download_dir = 'test_cache')
-    
     def test_fractional_atoms(self):
-        """ Test the CIFParser returns fractional atomic coordinates. """
-        for atm in self.parser.atoms():
-            self.assertLessEqual(atm.coords.max(), 1)
-            self.assertGreaterEqual(atm.coords.min(), 0)
+        """ Test the PDBParser returns fractional atomic coordinates. """
+        with PDBParser('1fbb', download_dir = 'test_cache') as parser:
+            for atm in parser.atoms():
+                self.assertLessEqual(atm.coords.max(), 1)
+                self.assertGreaterEqual(atm.coords.min(), 0)
         
     def test_symmetry_operators(self):
         """ Test that the non-translation part of the symmetry_operators is an invertible
         matrix of determinant 1 | -1 """
-        for sym_op in self.parser.symmetry_operators():
-            t = sym_op[:3,:3]
-            self.assertAlmostEqual(abs(np.linalg.det(t)), 1, places = 5)
+        with PDBParser('1fbb', download_dir = 'test_cache') as parser:
+            for sym_op in parser.symmetry_operators():
+                t = sym_op[:3,:3]
+                self.assertAlmostEqual(abs(np.linalg.det(t)), 1, places = 5)
 
 class TestCIFParser(unittest.TestCase):
     """ Test the CIFParser on all CIF files stored herein """
@@ -75,17 +74,8 @@ class TestCIFParser(unittest.TestCase):
                     from_parser = Hall2Number[p.hall_symbol()]
                     
                     crystal = Crystal.from_cif(name)
-                    spglib_dataset = get_symmetry_dataset(crystal.spglib_cell, symprec = 1e-2)
-                    from_spglib = spglib_dataset['number']
+                    from_spglib = crystal.spacegroup_info()['international_number']
                     self.assertEqual(from_parser, from_spglib)
-    
-    def test_graphite(self):
-        """ Test CIFParser on C.cif and compare to built-in graphite """
-        C_path = os.path.join('skued', 'structure', 'cifs', 'C.cif')
-        c = Crystal.from_cif(C_path)
-        
-        self.assertEqual(len(c), len(graphite))
-        self.assertAlmostEqual(c.volume, graphite.volume, places = -1)
     
     def test_silicon(self):
         """ Test CIFParser on Si.cif (diamond structure) """
@@ -96,7 +86,7 @@ class TestCIFParser(unittest.TestCase):
     
     def test_vo2(self):
         """ Test CIFParser on vo2.cif (monoclinic M1) """
-        VO2_path = os.path.join('skued', 'structure', 'cifs', 'vo2.cif')
+        VO2_path = os.path.join('skued', 'structure', 'cifs', 'vo2-m1.cif')
         vo2 = Crystal.from_cif(VO2_path)
 
         self.assertEqual(len(vo2), 12)

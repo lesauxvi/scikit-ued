@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import unittest
-from ..quantities import lorentz, electron_wavelength, interaction_parameter
+from .. import lorentz, electron_wavelength, interaction_parameter
 
 class TestLorentz(unittest.TestCase):
     
@@ -13,13 +13,20 @@ class TestLorentz(unittest.TestCase):
         """ Test lorentz() on an array of energies """
         kV = np.zeros((128,), dtype = np.float)
         self.assertTrue(np.allclose(lorentz(kV), np.ones_like(kV)))
+    
+    def test_range(self):
+        """ Test that lorentz factor is always in the range (0, 1] """
+        kv = np.linspace(0, 1e6, num = 256)
+        factors = lorentz(kv)
+        self.assertTrue(np.all(factors <= 1))
+        self.assertTrue(np.all(factors > 0))
 
 class TestElectronWavelength(unittest.TestCase):
     
     def test_trivial(self):
         """ Test that the electron wavelength at zero energy is zero """
-        self.assertAlmostEqual(electron_wavelength(10), 0.122128679)
-        self.assertAlmostEqual(electron_wavelength(200), 0.02509626)
+        self.assertAlmostEqual(electron_wavelength(10), 0.122, places = 3)
+        self.assertAlmostEqual(electron_wavelength(200), 0.0250, places = 3)
 
 class TestInteractionParameter(unittest.TestCase):
     

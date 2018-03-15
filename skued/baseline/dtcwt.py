@@ -3,6 +3,7 @@
 Dual-tree complex wavelet transform
 ===================================
 """
+from collections import deque
 from itertools import cycle
 import numpy as np
 from pywt import dwt, idwt, dwt2, idwt2, dwt_max_level, wavelist, Wavelet
@@ -10,9 +11,8 @@ from functools import lru_cache
 from os.path import join, dirname
 
 DATADIR = join(dirname(__file__), 'data')
-ALL_QSHIFT = frozenset({'qshift1', 'qshift2', 'qshift3', 'qshift4', 'qshift5', 'qshift6'})
-ALL_COMPLEX_WAV = ALL_QSHIFT
-ALL_FIRST_STAGE = frozenset([wav for wav in wavelist(kind = 'discrete') if wav != 'dmey'])
+ALL_COMPLEX_WAV = ['qshift1', 'qshift2', 'qshift3', 'qshift4', 'qshift5', 'qshift6']
+ALL_FIRST_STAGE = list(filter(lambda name: name != 'dmey', wavelist(kind = 'discrete')))
 
 def dtcwt(data, first_stage, wavelet, mode = 'constant', level = None, axis = -1):
     """
@@ -47,7 +47,8 @@ def dtcwt(data, first_stage, wavelet, mode = 'constant', level = None, axis = -1
     
     Raises
     ------
-    ValueError: Raised if axis argument is invalid (e.g. too large).
+    ValueError: Raised if axis argument is invalid (e.g. too large) or if the input data
+                is not even along the transform direction.
     
     Notes
     -----
@@ -73,6 +74,9 @@ def dtcwt(data, first_stage, wavelet, mode = 'constant', level = None, axis = -1
     # Check axis bounds
     if axis > data.ndim - 1:
         raise ValueError('Input array has {} dimensions, but input axis is {}'.format(data.ndim, axis))
+    elif (data.shape[axis] % 2):
+        raise ValueError('Input array has shape {} along transform direction \
+                          (axis = {}). Even length is required.'.format(data.shape[axis], axis))
         
     real_wavelet, imag_wavelet = dualtree_wavelet(wavelet)
     real_first, imag_first = dt_first_stage(first_stage)
@@ -82,7 +86,8 @@ def dtcwt(data, first_stage, wavelet, mode = 'constant', level = None, axis = -1
     imag_coeffs = _single_tree_analysis_1d(data = data, first_stage = imag_first, wavelet = (imag_wavelet, real_wavelet), 
                                            level = level, mode = mode, axis = axis)
 
-    # Combine coefficients into complex form
+    # Due to the unpredictability of wavelet coefficient sizes,
+    # the following operation cannot be done using ndarrays
     return [real + 1j*imag for real, imag in zip(real_coeffs, imag_coeffs)]
 
 def idtcwt(coeffs, first_stage, wavelet, mode = 'constant', axis = -1):
@@ -120,21 +125,24 @@ def idtcwt(coeffs, first_stage, wavelet, mode = 'constant', axis = -1):
     if len(coeffs) < 1:
         raise ValueError("Coefficient list too short with {} elements (minimum 1 array required).".format(len(coeffs)))
     elif len(coeffs) == 1: # level 0 inverse transform
-        real = imag = coeffs[0]
+        return np.sqrt(2)*coeffs[0]
     else:
         real_wavelet, imag_wavelet = dualtree_wavelet(wavelet)
         real_first, imag_first = dt_first_stage(first_stage)
 
-        real = _single_tree_synthesis_1d(coeffs = [coeff.real for coeff in coeffs], first_stage = real_first, 
+        # reconstruction of real part is first, then
+        # reconstruction of imaginary part
+        # Large performance boost by adding imaginary part in-place
+        inverse = _single_tree_synthesis_1d(coeffs = [coeff.real for coeff in coeffs], first_stage = real_first, 
                                       wavelet = (real_wavelet, imag_wavelet), mode = mode, axis = axis)
-        imag = _single_tree_synthesis_1d(coeffs = [coeff.imag for coeff in coeffs], first_stage = imag_first, 
+        inverse +=_single_tree_synthesis_1d(coeffs = [coeff.imag for coeff in coeffs], first_stage = imag_first, 
                                       wavelet = (imag_wavelet, real_wavelet), mode = mode, axis = axis)
     
-    return np.sqrt(2)*(real + imag)/2
+        return np.sqrt(2)*inverse/2
 
 def dt_max_level(data, first_stage, wavelet, axis = -1):
     """
-    Returns the maximum decomposition level from the dual-tree complex wavelet transform.
+    Returns the maximum decomposition level possible from the dual-tree complex wavelet transform.
 
     Parameters
     ----------
@@ -151,9 +159,11 @@ def dt_max_level(data, first_stage, wavelet, axis = -1):
     Returns
     -------
     max_level : int
+        Maximum decomposition level.
     """
     real_wavelet, imag_wavelet = dualtree_wavelet(wavelet)
-    return dwt_max_level(data_len = data.shape[axis], filter_len = max([real_wavelet.dec_len, imag_wavelet.dec_len]))
+    return dwt_max_level(data_len = data.shape[axis], 
+                         filter_len = max([real_wavelet.dec_len, imag_wavelet.dec_len]))
 
 def _normalize_size_axis(approx, detail, axis):
     """ 
@@ -198,15 +208,16 @@ def _single_tree_analysis_1d(data, first_stage, wavelet, level, mode, axis):
         (`cA_n`) of the result is approximation coefficients array and the
         following elements (`cD_n` - `cD_1`) are details coefficients arrays.
     """
-    approx, first_detail = dwt(data = data, wavelet = first_stage, mode = mode, axis = axis)    
-    coeffs_list = [first_detail]
+    approx, first_detail = dwt(data = data, wavelet = first_stage, mode = mode, axis = axis)   
+    # Use of a deque vs. a list is because deque.appendleft is O(1) 
+    coeffs_list = deque([first_detail])
     for i, wav in zip(range(level - 1), cycle(wavelet)):
         approx, detail = dwt(data = approx, wavelet = wav, mode = mode, axis = axis)
-        coeffs_list.append(detail)
+        coeffs_list.appendleft(detail)
     
     # Format list ot be compatible to PyWavelet's format. See pywt.wavedec source.
-    coeffs_list.append(approx)
-    return list(reversed(coeffs_list))
+    coeffs_list.appendleft(approx)
+    return coeffs_list
 
 def _single_tree_synthesis_1d(coeffs, first_stage, wavelet, mode, axis):
     """
@@ -243,7 +254,7 @@ def _single_tree_synthesis_1d(coeffs, first_stage, wavelet, mode, axis):
     approx = _normalize_size_axis(approx, first_stage_detail, axis = axis)
     return idwt(cA = approx, cD = first_stage_detail, wavelet = first_stage, mode = mode, axis = axis)
 
-@lru_cache(maxsize = len(ALL_QSHIFT))
+@lru_cache(maxsize = len(ALL_COMPLEX_WAV))
 def dualtree_wavelet(name):
     """
     Returns a complex wavelet suitable for dual-tree cwt from a name.
@@ -258,8 +269,7 @@ def dualtree_wavelet(name):
     
     Raises
     ------
-    ValueError
-        If illegal wavelet name.
+    ValueError : If illegal wavelet name.
     """
     filters = ('h0a', 'h0b', 'g0a', 'g0b', 'h1a', 'h1b', 'g1a', 'g1b')
     
@@ -274,7 +284,8 @@ def dualtree_wavelet(name):
     real_filter_bank = [dec_real_low, dec_real_high, rec_real_low, rec_real_high]
     imag_filter_bank = [dec_imag_low, dec_imag_high, rec_imag_low, rec_imag_high]
 
-    return Wavelet(name = 'real:' + name, filter_bank = real_filter_bank), Wavelet(name = 'imag:' + name, filter_bank = imag_filter_bank)
+    return (Wavelet(name = 'real:' + name, filter_bank = real_filter_bank), 
+            Wavelet(name = 'imag:' + name, filter_bank = imag_filter_bank))
 
 @lru_cache(maxsize = len(ALL_FIRST_STAGE))
 def dt_first_stage(wavelet):
@@ -291,8 +302,7 @@ def dt_first_stage(wavelet):
 
     Raises
     ------
-    ValueError
-        If invalid first stage wavelet.
+    ValueError : If invalid first stage wavelet.
     """
     if not isinstance(wavelet, Wavelet):
         wavelet = Wavelet(wavelet)
@@ -315,4 +325,5 @@ def dt_first_stage(wavelet):
     for filt in shifted_fb[2::]:    # Reconstruction filters
         filt = np.roll(filt, -1)
     
-    return Wavelet(name = wavelet.name, filter_bank = filter_bank), Wavelet(name = wavelet.name, filter_bank = shifted_fb)
+    return (Wavelet(name = wavelet.name, filter_bank = filter_bank), 
+            Wavelet(name = wavelet.name, filter_bank = shifted_fb))

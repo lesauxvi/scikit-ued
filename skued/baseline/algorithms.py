@@ -31,8 +31,13 @@ def _iterative_baseline(array, max_iter, mask, background_regions, axes, approx_
 	if mask is None:
 		mask = np.zeros_like(array, dtype = np.bool)
 	
-	signal = np.array(array, copy = True)
-	background = np.zeros_like(array, dtype = np.float)
+	# Preparation for loop
+	original_signal 	 = np.array(array, copy = True)
+	signal 				 = np.array(original_signal, copy = True)
+	background 			 = np.zeros_like(signal, dtype = np.float)
+	background_too_large = np.empty_like(background, dtype = np.bool)
+	signal_too_large     = np.empty_like(background, dtype = np.bool)
+
 	for i in range(max_iter):
 		
 		# Make sure the background values are equal to the original signal values in the
@@ -41,11 +46,18 @@ def _iterative_baseline(array, max_iter, mask, background_regions, axes, approx_
 			signal[index] = array[index]
 
 		# Wavelet reconstruction using approximation coefficients
+		# Note : the baseline cannot physically be negative
 		background[:] = approx_rec(signal)
+		np.clip(background, a_min = 0, a_max = None, out = background)
+
+		# The baseline cannot physically be larger than the original signal
+		np.greater(background, original_signal, out = background_too_large)
+		background[background_too_large] = signal[background_too_large]
 		
 		# Modify the signal so it cannot be more than the background
 		# This reduces the influence of the peaks in the wavelet decomposition
-		signal[signal > background] = background[signal > background]
+		np.greater(signal, background, out = signal_too_large)
+		signal[signal_too_large] = background[signal_too_large]
 	
 	# The background should be identically 0 where the data points are invalid
 	background[mask] = 0 
@@ -158,7 +170,7 @@ def _dwt_approx_rec(array, level, wavelet, mode, axis):
 	# Sometimes pywt.waverec returns a signal that is longer than the original signal
 	while reconstructed.shape[axis] > array.shape[axis]:
 		reconstructed = np.swapaxes(np.swapaxes(reconstructed, 0, axis)[:array.shape[axis]], 0, axis)
-	return  reconstructed
+	return reconstructed
 
 def _dwt_approx_rec2(array, level, wavelet, mode, axis):
 	"""

@@ -53,10 +53,8 @@ If you don't have a file on hand, or want to create an idealized crystal, consid
 object by hand.
 
 To do this, you need:
-1. iterable of :class:`Atom` objects, with coordinates. These atoms can either be the full unit cell
-or the asymmetric unit cell;
+1. iterable of :class:`Atom` objects, with coordinates. These atoms must be the full unit cell;
 2. three lattice vectors;
-3. (optional) symmetry operators that generate the full unit cell from the asymmetric unit cell.
 
 As an example, let's create the simplest crystal structure known: 
 `alpha-Polonium (simple cubic) <https://en.wikipedia.org/wiki/Polonium#Solid_state_form>`_::
@@ -71,22 +69,29 @@ As an example, let's create the simplest crystal structure known:
 
 In the case where atoms are given as an asymmetric unit cell and a set of symmetry operators, you can use the
 :func:`symmetry_expansion` function to generate a set of *unique* atoms (even if some symmetry operators might be redundant).
+The generated set of atoms can be passed to the constructor of :class:`Crystal`.
 
 Crystal attributes
 ------------------
 The :class:`Crystal` object provides some interfaces for easy structure manipulation. First, a :class:`Crystal` is an iterable::
 
-	from skued.structure import graphite
+	from skued import Crystal
+	graphite = Crystal.from_database('C')
 
 	for atm in graphite:	#Loops over atoms in the unit cell
-	    print(atm.element, atm.coords)
+	    print(atm)
     
 The :func:`len` of a :class:`Crystal` is the unit cell size (in number of atoms)::
 
-    from skued import Crystal
-
     c = Crystal.from_pdb('1gzx') # hemoglobin
-    len(c) # 17536
+    len(c) 	                     `# 17536
+
+The :class:`Crystal` class is a set-like container; checking containership (with the builtin ``in`` statement) is very fast::
+
+	graphite = Crystal.from_database('C')
+	carbon = next(iter(graphite))
+
+	assert carbon in graphite 
 
 :class:`Crystal` instances can be equated to each other::
 
@@ -100,6 +105,11 @@ from the :attr:`source` attribute::
 
     c = Crystal.from_pdb('1gzx')
     print(c.source)
+
+:class:`Crystal` instances have a nice string representation, ideal for quick information:
+
+	lsmo = Crystal.from_database('LSMO')
+	print(lsmo)
 
 :class:`Crystal` instances can be converted to NumPy arrays as well::
 
@@ -129,7 +139,8 @@ Lattice vectors and reciprocal space
 Once a :class:`Crystal` object is ready, you can manipulate the lattice parameters via the underlying :class:`Lattice`
 super-class. Let's use the built-in example of graphite::
 
-	from skued.structure import graphite
+	from skued import Crystal
+	graphite = Crystal.from_database('C')
 	
 	a1, a2, a3 = graphite.lattice_vectors
 	b1, b2, b3 = graphite.reciprocal_vectors
@@ -138,14 +149,23 @@ The standard `three lengths and angles` description of a lattice is also accessi
 
 	a, b, c, alpha, beta, gamma = graphite.lattice_parameters
 
-The unit cell volume (and by extensions, density) is also accessible:
+The unit cell volume (and by extensions, density) is also accessible::
 
-	vol = graphite.volume
+	vol = graphite.volume	# Angstroms cubed
 	density = vol/len(graphite)
+
+As a lattice can be fully described by its basis vectors, a NumPy array can be created from a :class:`Lattice` instance.
 
 Space-group Information
 -----------------------
-Thanks to `spglib <http://atztogo.github.io/spglib/>`_, we can get symmetry and space-group information 
+The `lattice system <https://en.wikipedia.org/wiki/Bravais_lattice#Bravais_lattices_in_3_dimensions>`_ of a Lattice or Crystal instance is also available via the :attr:`lattice_system` attribute::
+
+	vo2 = Crystal.from_database('vo2-m1') # Monoclinic M1 VO2
+	print(vo2.lattice_system)             # = 'monoclinic'
+
+Better control on length tolerances is available via the :func:`lattice_system` function.
+
+Thanks to `spglib <http://atztogo.github.io/spglib/>`_, we can get space-group information 
 from a :class:`Crystal` instance::
 
 	from skued import Crystal
@@ -153,7 +173,7 @@ from a :class:`Crystal` instance::
 	gold = Crystal.from_database('Au')
 	spg_info = gold.spacegroup_info()
 
-In the above example, :data:`spg_info` is a dictionary with the following four keys:
+In the above example, :data:`spg_info` is a dictionary with the following keys:
 
 * ``'international_symbol'``: International Tables of Crystallography space-group symbol (short);
 
@@ -167,43 +187,18 @@ In the above example, :data:`spg_info` is a dictionary with the following four k
 
 * ``'hall_number'`` : Hall number (between 1 and 531).
 
-You can get even more information by using :mod:`spglib` functions directly::
-
-	from spglib import get_symmetry_dataset
-
-	all_the_info = get_symmetry_dataset(gold.spglib_cell)
-
-The content of the :data:`all_the_info` dictionary is documented `here <http://atztogo.github.io/spglib/python-spglib.html#get-symmetry-dataset>`_.
-Many of :mod:`spglib`'s routines can be used with :attr:`Crystal.spglib_cell`.
-
 Scattering utilities
 --------------------
-:class:`Crystal` objects have a few methods that make life easier when dealing with scattering data and modeling.
+:class:`Lattice` objects have a few methods that make life easier when dealing with scattering data and modeling.
 
 The conversion between Miller indices and scattering vectors is available:: 
 
-	from skued.structure import graphite
+	from skued import Crystal
+	graphite = Crystal.from_database('C')
 
+	# Behavior inherited from Lattice superclass
 	G = graphite.scattering_vector(1,0,0)
 	h, k, l = graphite.miller_indices(G) #1, 0, 0
-
-Arrays of Miller indices can be generated for all Miller indices that fall below a bound::
-
-	h, k, l = graphite.bounded_reflections(12) 	# All reflections below 12 Angs^-1
-
-In this example, :data:`h`, :data:`k`, and :data:`l` are arrays of integers; each combined row is a reflection.
-
-Static structure factor calculation is also possible, both for a single reflection and arrays of reflections::
-
-	import numpy as np
-
-	# For a single reflection
-	SF = graphite.structure_factor_miller(1, 0, 0)
-
-	# For an array of reflections: vectorized calculation
-	h, k, l = graphite.bounded_reflections(12)
-	SF = graphite.structure_factor_miller(h, k, l)
-	SF.shape == h.shape 	# True
 
 Compatibility with ASE
 ----------------------
@@ -236,49 +231,27 @@ To create an atom, simply provide its element and coordinates::
 
 	copper = Atom(element = 'Cu', coords = [0,0,0])
 
-Optional information can be give, such as magnetic moment and mean-squared displacement. For users of :mod:`ase`, 
+Optional information can be given, such as magnetic moment and mean-squared displacement. For users of :mod:`ase`, 
 another possibility is to instantiate an :class:`Atom` from an :class:`ase.Atom` using the :meth:`Atom.from_ase` 
 constructor.
+
+:class:`Atom` instances are hashable; they can be used as ``dict`` keys or stored in a ``set``.
 
 Since we are most concerned with atoms in crystals, the coordinates here are assumed to be fractional.
 The real-space position with respect to a :class:`Crystal` or :class:`Lattice` can be accessed using the 
 :meth:`xyz` method::
 
-    from skued.structure import graphite
-    
+	from skued import Crystal
+	graphite = Crystal.from_database('C')
+	
     carbon = list(graphite)[-1]
     fractional = carbon.coords
     real = carbon.xyz(lattice = graphite)
 
-One important feature of the :class:`Atom` class is the possibility to compute the electrostatic
-potential across meshes::
+The distance between two atoms can be calculated by taking their difference::
 
-	import numpy as np
-	import matplotlib.pyplot as plt
-
-	xx, yy = np.meshgrid(np.linspace(-0.3, 0.3, num = 100), 
-	                     np.linspace(-0.3, 0.3, num = 100))
-	dist = np.sqrt(xx**2 + yy**2)	# distance from the atom in Angstroms
-
-	es_potential = copper.potential(dist)
-	plt.imshow(es_potential)
-
-After plot formatting:
-
-.. plot::
-	
-	import numpy as np
-	import matplotlib.pyplot as plt
-	from skued.structure import Atom
-	copper = Atom(element = 'Cu', coords = [0,0,0])
-	xx, yy = np.meshgrid(np.linspace(-0.3, 0.3, num = 100), 
-						 np.linspace(-0.3, 0.3, num = 100))
-	dist = np.sqrt(xx**2 + yy**2)	# distance from the atom in Angstroms
-	es_potential = copper.potential(dist)
-	plt.title('Atomic potential of Cu (log-scale)')
-	plt.imshow(np.log(1 + es_potential), extent = [xx.min(), xx.max(), yy.min(), yy.max()])
-	plt.ylabel('x-direction ($\AA$)')
-	plt.xlabel('y-direction ($\AA$)')
-	plt.show()
+	copper = Atom('Cu', coords = [0,0,0])
+	silver = Atom('Ag', coords = [1,0,0])
+	dist = silver - copper			# distance in fractional coordinates
 
 :ref:`Return to Top <structure_tutorial>`

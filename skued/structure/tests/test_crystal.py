@@ -1,20 +1,26 @@
 # -*- coding: utf-8 -*-
-from math import radians
-from copy import deepcopy, copy
-from random import choice, seed
-from itertools import permutations
-import numpy as np
-from .. import Crystal, Atom, Lattice, graphite
-from ... import rotation_matrix, transform
+import pickle
 import unittest
+from copy import copy, deepcopy
+from itertools import permutations
+from math import radians
+from os.path import join, isdir
+from random import choice, seed
+from tempfile import TemporaryDirectory
+
+import numpy as np
+
+from .. import Atom, Crystal, Lattice
+from ... import rotation_matrix, transform
 
 #seed(23)
 
 try:
     import ase
-    ASE = True
 except ImportError:
     ASE = False
+else:
+    ASE = True
 
 @unittest.skipIf(not ASE, 'ASE not importable')
 class TestAseAtoms(unittest.TestCase):
@@ -38,41 +44,6 @@ class TestAseAtoms(unittest.TestCase):
         # self.assertSetEqual(set(self.crystal), set(crystal2))
         self.assertEqual(len(self.crystal), len(crystal2))
 
-class TestCrystalMethods(unittest.TestCase):
-
-    def setUp(self):
-        name = choice(list(Crystal.builtins))
-        self.crystal = Crystal.from_database(name)
-    
-    def test_array(self):
-        """ Test Crystal.__array__ """
-        arr = np.array(self.crystal)
-        self.assertSequenceEqual(arr.shape, (len(self.crystal), 4))
-
-class TestBoundedReflections(unittest.TestCase):
-
-    def setUp(self):
-        self.crystal = Crystal.from_database(next(iter(Crystal.builtins)))
-
-    def test_bounded_reflections_negative(self):
-        """ Test that negative reflection bounds raise an Exception.
-        Otherwise, an infinite number of reflections will be generated """
-        with self.assertRaises(ValueError):
-            hkl = list(self.crystal.bounded_reflections(-1))
-    
-    def test_bounded_reflections_zero(self):
-        """ Check that bounded_reflections returns (000) for a zero bound """
-        h, k, l = self.crystal.bounded_reflections(0)
-        [self.assertEqual(len(i), 1) for i in (h, k, l)]
-        [self.assertEqual(i[0], 0) for i in (h, k, l)]
-    
-    def test_bounded_reflections_all_within_bounds(self):
-        """ Check that every reflection is within the bound """
-        bound = 10
-        Gx, Gy, Gz = self.crystal.scattering_vector(*self.crystal.bounded_reflections(nG = bound))
-        norm_G = np.sqrt(Gx**2 + Gy**2 + Gz**2)
-        self.assertTrue(np.all(norm_G <= bound))
-
 class TestSpglibMethods(unittest.TestCase):
     
     def test_spacegroup_info_graphite(self):
@@ -89,13 +60,22 @@ class TestSpglibMethods(unittest.TestCase):
         
         self.assertDictEqual(info, supposed)
     
-    def test_primitive(self):
+    def test_primitive_for_builtins(self):
         """ Test that all built-in crystal have a primitive cell """
         for name in Crystal.builtins:
             with self.subTest(name):
                 c = Crystal.from_database(name)
                 prim = c.primitive(symprec = 0.1)
                 self.assertLessEqual(len(prim), len(c))
+    
+    def test_primitive_uniqueness(self):
+        """ Test that the primitive cell of a primitive cell is itself """
+        for name in Crystal.builtins:
+            with self.subTest(name):
+                c = Crystal.from_database(name)
+                prim = c.primitive(symprec = 0.1)
+                prim2 = prim.primitive(symprec = 0.1)
+                self.assertIs(prim, prim2)
 
 class TestCrystalRotations(unittest.TestCase):
 
@@ -172,7 +152,15 @@ class TestCrystalConstructors(unittest.TestCase):
         c = Crystal.from_cod(1521124, download_dir = 'test_cache')
         c2 = Crystal.from_cod(1521124, revision = 176429, download_dir = 'test_cache')
 
-        self.assertSetEqual(set(c), set(c2))
+        self.assertEqual(c, c2)     
+
+    def test_from_cod_new_dir(self):     
+        """ Test that a cache dir is created by Crystal.from_cod """
+        with TemporaryDirectory() as temp_dir:
+            download_dir = join(temp_dir, 'test_cod')
+            self.assertFalse(isdir(download_dir))
+            c = Crystal.from_cod(1521124, download_dir = download_dir)
+            self.assertTrue(isdir(download_dir))
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+notebook/
 *.py[cod]
 *$py.class
 
@@ -75,6 +76,9 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/source/functions/
+docs/source/classes/
+
 
 # PyBuilder
 target/
@@ -104,3 +108,4 @@ ENV/
 # PyCharm
 .idea/
 benchmark.py
+potential_map.py

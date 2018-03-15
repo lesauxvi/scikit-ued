@@ -33,8 +33,17 @@ General Documentation
     :maxdepth: 2
 
     installation
-    tutorials/index
+    manip_structure
     api
+    tutorials/index
+
+Related Projects
+================
+
+A graphical user interface for the dual-tree complex wavelet transform baseline-removal routine is available as a 
+`separate package <https://pypi.python.org/pypi/dtgui>`_.
+
+Streaming operations on NumPy arrays are available in the `npstreams package <https://pypi.python.org/pypi/npstreams>`_.
 
 Authors
 =======

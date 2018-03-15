@@ -14,34 +14,12 @@ scikit-ued
 Collection of algorithms and functions for ultrafast electron diffraction. It aims to be a fully-tested package
 taking advantage of Python's most recent features.
 
-Examples
---------
-
-First and foremost, ``skued`` is concerned with the diffraction of crystals. Hence, building a ``Crystal`` object
-from various sources is easy::
-
-    from skued import Crystal
-
-    tise2 = Crystal.from_cif('tise2.cif')
-    graphite = Crystal.from_database('C')       # Internal database
-    hemoglobin = Crystal.from_pdb('1gzx')       # Protein Data Bank
-    vo2 = Crystal.from_cod(1521124)             # Crystallography Open Database
-
-The ``Crystal`` object encodes multiple attributes and methods related to space-group, symmetry, and scattering.
-
-Another important part of ultrafast electron diffraction is image processing. Image-alignment, exploitation of 
-symmetry, azimuthal average of polycrystalline data, and more, are included.
-
-Baseline-determination in polycrystalline data is a cornerstone of this package. Using the dual-tree complex 
-wavelet transform, time-varying baselines can be extracted with high accuracy, even in cases where diffraction
-peaks overlap over the entire dataset. 
-
-For more examples, see our `tutorials <http://scikit-ued.readthedocs.io/en/latest/tutorials/index.html>`_.
+For examples, see our `tutorials <https://scikit-ued.readthedocs.io/en/latest/tutorials/index.html>`_.
 
 API Reference
 -------------
 
-The `API Reference on readthedocs.io <http://scikit-ued.readthedocs.io>`_ provides API-level documentation, as 
+The `API Reference on readthedocs.io <https://scikit-ued.readthedocs.io>`_ provides API-level documentation, as 
 well as tutorials.
 
 Installation
@@ -58,6 +36,9 @@ To install the latest development version from `Github <https://github.com/Laure
 Each version is tested against Python 3.5 and 3.6. If you are using a different version, tests can be run
 using the standard library's `unittest` module.
 
+Dependencies for scikit-ued (e.g. ``spglib``) require compilation. Windows users should 
+minimally have the `Visual Studio Build Tools <https://www.visualstudio.com/downloads/>`_ installed.
+
 After installing scikit-ued you can use it like any other Python module as ``skued``.
 
 Optional dependencies
@@ -65,6 +46,16 @@ Optional dependencies
 
 While it is not strictly required, the fourier transform routines from ``pyfftw`` will be preferred If
 ``pyfftw`` is installed.
+
+For displaying diffraction images using the ``skued.diffshow`` function, PyQtGraph and PyQt5 are both required.
+
+Related projects
+----------------
+
+A graphical user interface for the dual-tree complex wavelet transform baseline-removal routine is available as a 
+`separate package <https://pypi.python.org/pypi/dtgui>`_.
+
+Streaming operations on NumPy arrays are available in the `npstreams package <https://pypi.python.org/pypi/npstreams>`_.
 
 Citations
 ---------

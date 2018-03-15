@@ -18,7 +18,9 @@ Contents
 
 * :ref:`alignment`
 * :ref:`symmetry`
+* :ref:`pixel_masks`
 * :ref:`powder`
+* :ref:`denoising`
 
 .. _alignment:
 
@@ -42,16 +44,16 @@ All of this is taken care of in scikit-ued's :func:`diff_register` function. Let
 
 .. plot::
 
-	from skimage.io import imread
+	from skued import diffread
 	import matplotlib.pyplot as plt
 
-	ref = imread('Cr_1.tif')
-	im = imread('Cr_2.tif')
+	ref = diffread('Cr_1.tif')
+	im = diffread('Cr_2.tif')
 
 	fig, (ax1, ax2, ax3) = plt.subplots(nrows = 1, ncols = 3, figsize = (9,3))
 	ax1.imshow(ref, vmin = 0, vmax = 200)
 	ax2.imshow(im, vmin = 0, vmax = 200)
-	ax3.imshow(ref - im, cmap = 'RdBu_r')
+	ax3.imshow(ref - im, cmap = 'RdBu_r', vmin = -100, vmax = 100)
 
 	for ax in (ax1, ax2, ax3):
 		ax.get_xaxis().set_visible(False)
@@ -67,11 +69,11 @@ All of this is taken care of in scikit-ued's :func:`diff_register` function. Let
 From the difference pattern, we can see that the 'Data' pattern is shifted from 'Reference' quite a bit.
 To determine the exact shift, we need to use a mask that obscures the beam-block and main beam::
 
-	from skued.image import diff_register, shift_image
+	from skued import diff_register, shift_image, diffread
 	import numpy as np
 
-	ref = imread('Cr_1.tif')
-	im = imread('Cr_2.tif')
+	ref = diffread('Cr_1.tif')
+	im = diffread('Cr_2.tif')
 
 	mask = np.zeros_like(ref, dtype = np.bool)
 	mask[0:1250, 950:1250] = True
@@ -83,13 +85,12 @@ Let's look at the difference:
 
 .. plot::
 
-	from skimage.io import imread
 	import matplotlib.pyplot as plt
 	import numpy as np
-	from skued.image import diff_register, shift_image
+	from skued import diff_register, shift_image, diffread
 
-	ref = imread('Cr_1.tif')
-	im = imread('Cr_2.tif')
+	ref = diffread('Cr_1.tif')
+	im = diffread('Cr_2.tif')
 
 	mask = np.zeros_like(ref, dtype = np.bool)
 	mask[0:1250, 950:1250] = True
@@ -100,10 +101,10 @@ Let's look at the difference:
 	fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(nrows = 2, ncols = 3, figsize = (9,6))
 	ax1.imshow(ref, vmin = 0, vmax = 200)
 	ax2.imshow(im, vmin = 0, vmax = 200)
-	ax3.imshow(ref - im, cmap = 'RdBu_r')
+	ax3.imshow(ref - im, cmap = 'RdBu_r', vmin = -100, vmax = 100)
 	ax4.imshow(mask, vmin = 0, vmax = 1, cmap = 'binary')
 	ax5.imshow(shifted, vmin = 0, vmax = 200)
-	ax6.imshow(ref - shifted, cmap = 'RdBu_r')
+	ax6.imshow(ref - shifted, cmap = 'RdBu_r', vmin = -100, vmax = 100)
 
 	for ax in (ax1, ax2, ax3, ax4, ax5, ax6):
 		ax.get_xaxis().set_visible(False)
@@ -134,8 +135,7 @@ rotational symmetry.
 .. plot::
 
     import matplotlib.pyplot as plt
-    from skimage.io import imread
-    from skued.image import nfold
+    from skued import nfold, diffread
     import numpy as np
 
     center = (1010, 1111)
@@ -144,7 +144,7 @@ rotational symmetry.
     mask[1100::, 442:480] = True # Artifact line
     mask[0:1260, 900:1140] = True # beamblock
 
-    image = imread('graphite.tif')
+    image = diffread('graphite.tif')
     av = nfold(image, mod = 6, center = center, mask = mask)
 
     fig , (ax1, ax2, ax3) = plt.subplots(1,3, figsize = (9,3))
@@ -165,11 +165,41 @@ rotational symmetry.
 
 To use :func:`nfold`, all you need to know is the center of the diffraction pattern::
 
-    from skued.image import nfold
-    from skimage.io import imread
+    from skued import nfold, diffread
 
-    im = imread('graphite.tif')
+    im = diffread('graphite.tif')
     av = nfold(im, mod = 6, center = center)    # mask is optional
+
+
+.. _pixel_masks:
+
+Pixel Masks
+===========
+
+Image data can be rejected on a per-pixel basis by using pixel masks. These masks are represented
+by boolean arrays that evaluate to ``True`` on invalid pixels.
+
+:mod:`scikit-ued` offers some functions related to creation and manipulation of pixel masks.
+
+Creation of a pixel mask
+------------------------
+
+A pixel mask can be created from a set of images sharing the same properties. For example, diffraction patterns
+before photoexcitation (i.e. dark runs) form a set of images that should be identical.
+
+Let's imaging a set of such images with filenames `dark_run_*.tif`. We can create a pixel mask with the :func:`mask_from_collection`::
+
+    from glob import iglob
+    from skued import mask_from_collection, diffread
+
+    dark_runs = map(diffread, iglob('dark_run_*.tif'))    # Can be a huge stack of images
+    mask = mask_from_collection(dark_runs)
+
+In the above example, pixel values outside opf the [0, 30000] range will be marked as invalid (default behaviour). Moreover,
+the per-pixel standard deviation over the image set is computed; pixels that fluctuate too much are also rejected.
+
+Note that since :func:`mask_from_collection` uses :mod:`npstreams` under the hood, the collection used to compute the 
+mask can be huge.
 
 .. _powder:
 
@@ -183,11 +213,11 @@ the center of those concentric rings is important. Let's load a test image:
 
 .. plot::
 
-    from skimage.io import imread
+	from skued import diffread
     import matplotlib.pyplot as plt
     path = 'Cr_1.tif'
 
-    im = imread(path, plugin = 'tifffile')
+    im = diffread(path)
     mask = np.zeros_like(im, dtype = np.bool)
     mask[0:1250, 950:1250] = True
 
@@ -204,7 +234,7 @@ This is a noisy diffraction pattern of polycrystalline vanadium dioxide.
 Finding the center of such a symmetry pattern can be done with the 
 :func:`powder_center` routine::
 	
-	from skued.image import powder_center
+	from skued import powder_center
 	ic, jc = powder_center(im, mask = mask)
 	
 	# Plotting the center as a black disk
@@ -219,12 +249,11 @@ Finding the center of such a symmetry pattern can be done with the
 
 .. plot::
 
-    from skimage.io import imread
+    from skued import powder_center, diffread
     import numpy as np
     import matplotlib.pyplot as plt
     path = 'Cr_1.tif'
-    im = imread(path, plugin = 'tifffile')
-    from skued.image import powder_center
+    im = diffread(path)
     mask = np.zeros_like(im, dtype = np.bool)
     mask[0:1250, 950:1250] = True
     ic, jc = powder_center(im, mask = mask)
@@ -292,19 +321,17 @@ First, we create a test image::
 
 ... and we can easily compute an angular average::
 	
-	from skued.image import angular_average
+	from skued import azimuthal_average
 
-	radius, intensity = angular_average(image, (xc, yc))
+	radius, intensity = azimuthal_average(image, (xc, yc))
 
 	plt.plot(radius, intensity)
 
 .. plot::
 	
-	from skued.image import angular_average
-	from skued import gaussian
+	from skued import azimuthal_average, gaussian
 	import numpy as np
 	import matplotlib.pyplot as plt
-	from skued import gaussian
 	image = np.zeros( (256, 256) )
 	xc, yc = image.shape[0]/2, image.shape[1]/2	# center
 	extent = np.arange(0, image.shape[0])
@@ -315,8 +342,61 @@ First, we create a test image::
 	image[np.logical_and(rr < 100, rr > 98)] = 0.5
 	image /= image.max()	# Normalize max to 1
 	image += np.random.random(size = image.shape)
-	radius, intensity = angular_average(image, (xc, yc))
+	radius, intensity = azimuthal_average(image, (xc, yc))
 	plt.plot(radius, intensity)
 	plt.show()
 
-:ref:`Return to Top <baseline_tutorial>`
+.. _denoising:
+
+Bonus : Removing Hot Spots 
+==========================
+
+An interesting use-case of baseline-removal (described in :ref:`baseline_tutorial`) is the removal of hot spots from images.
+
+Consider the following diffraction pattern:
+
+.. plot::
+
+	import matplotlib.pyplot as plt
+	from skued import diffread
+
+	im = diffread('hotspots.tif')
+	fig = plt.figure()
+	ax = fig.add_subplot(111)
+	ax.imshow(im, vmin = 0, vmax = 2e3)
+	ax.xaxis.set_visible(False)
+	ax.yaxis.set_visible(False)
+	plt.show()
+
+We can consider the image *without hotspots* as the baseline of the image *with hotspots* ::
+
+	from skued import diffread, baseline_dwt
+
+	im = diffread('hotspots.tif')
+	denoised = baseline_dwt(im, max_iter = 250, level = 1, wavelet = 'sym2', axis = (0, 1))
+
+The result is plotted below:
+
+.. plot::
+
+	import matplotlib.pyplot as plt
+	from skued import diffread, baseline_dwt
+
+	im = diffread('hotspots.tif')
+	denoised = baseline_dwt(im, max_iter = 250, level = 1, wavelet = 'sym2', axis = (0, 1))
+
+	fig, (ax1, ax2) = plt.subplots(1, 2)
+	ax1.imshow(im, vmin = 0, vmax = 2e3)
+	ax2.imshow(denoised, vmin = 0, vmax = 2e3)
+
+	for ax in (ax1, ax2):
+		ax.xaxis.set_visible(False)
+		ax.yaxis.set_visible(False)
+	plt.show()
+
+Try different combinations of wavelets, levels, and number of iterations (``max_iter``).
+
+Notice that the baseline-removal function used in the case of an image is :func:`baseline_dwt`, which works on 2D arrays.
+The same is not possible with :func:`baseline_dt`, which only works on 1D arrays at this time.
+
+:ref:`Return to Top <image_analysis_tutorial>`

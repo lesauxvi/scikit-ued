@@ -8,6 +8,7 @@ Reference/API
 
 .. currentmodule:: skued
 
+======================
 Baseline-determination
 ======================
 
@@ -15,116 +16,224 @@ Please refer to the :ref:`tutorial on baseline-determination <baseline_tutorial>
 
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
     baseline_dt
     baseline_dwt
-
-Dual-tree Complex Wavelet Transform
------------------------------------
-.. autosummary::
-    :toctree: functions/
-
     dtcwt
     idtcwt
 
+====================
+Time-series Analysis
+====================
+
+Time-series exploration and analysis.
+
+Time-zero tracking
+------------------
+
+Measurement of time-shifts between physically-equivalent time traces:
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    time_shift
+    time_shifts
+
+Robust statistics
+-----------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    mad
+
+Non-uniform Fast Fourier Transform
+----------------------------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    nfft
+    nfftfreq
+
+==============
 Image Analysis
 ==============
 
-Combine the routines in the :mod:`skued.image` module with
-`npstreams`_ to process diffraction data in parallel. Please refer 
+Combine the routines below with
+`npstreams`_ to process diffraction data in parallel. Refer 
 to the :ref:`tutorial on image manipulation <image_analysis_tutorial>` 
 for some examples.
 
+Symmetry
+--------
+
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
-    image.angular_average
-    image.powder_center
-    image.align
-    image.ialign
-    image.diff_register
-    image.shift_image
-    image.nfold
-    image.mnxc2
+    nfold
 
-Crystal structure
-=================
-Handling crystal structure information is crucial for many data analysis and modelling tasks.
-See the :ref:`Structure tutorial <structure_tutorial>` for some examples on how to use the following
-classes.
+Polycrystalline diffraction
+---------------------------
 
 .. autosummary::
-    :toctree: classes/
+    :toctree: functions/
+    :nosignatures:
+
+    azimuthal_average
+    powder_center
+    calibrate_scattvector
+
+Image alignment
+---------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    align
+    ialign
+    diff_register
+    shift_image
+    itrack_peak
+
+Correlations
+------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
     
-    Crystal
-    Atom
-    Lattice
+    xcorr
+    mnxc2
+
+Image masking
+-------------
 
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
-    skued.structure.symmetry_expansion
+    mask_from_collection
+    combine_masks
+    mask_image
 
+Image noise
+-----------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    snr_from_collection
+    isnr
+    triml
+    trimr
+
+==========
 Simulation
 ==========
 
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
-    skued.simulation.powdersim
+    structure_factor
+    affe
+    powdersim
+    electrostatic
+    pelectrostatic
+    bounded_reflections
 
+============
+Input/Output
+============
+
+General diffraction image I/O and plotting. Note that
+for :func:`diffshow`, the packages PyQtGraph and PyQt5 must be
+installed.
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    diffread
+    diffshow
+
+Merlin Image Binary (.mib) files:
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    mibheader
+    mibread
+    imibread
+
+==============
 Plot Utilities
 ==============
 
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
     spectrum_colors
     rgb_sweep
 
+===============
 Array Utilities
 ===============
 
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
     mirror
     repeated_array
+    cart2polar
+    polar2cart
+    cart2spherical
+    spherical2cart
+    plane_mesh
 
-Structure Parsing
-=================
-
-.. autosummary::
-    :toctree: classes/
-
-    structure.CIFParser
-    structure.PDBParser
-
-Quantities
-==========
+===================
+Electron Properties
+===================
 
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
     electron_wavelength
+    electron_velocity
     interaction_parameter
     lorentz
 
+=============
 Voigt Profile
 =============
 
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
     gaussian
     lorentzian
     pseudo_voigt
 
+=================
 Affine Transforms
 =================
 
 .. autosummary::
     :toctree: functions/
+    :nosignatures:
 
     affine_map
     transform
