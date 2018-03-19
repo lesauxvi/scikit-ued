@@ -3,9 +3,11 @@ Array utility functions
 """
 
 from itertools import repeat
+from warnings import warn
+
 import numpy as np
 from numpy.linalg import norm
-from warnings import warn
+
 
 def repeated_array(arr, num, axes = -1):
     """
@@ -47,6 +49,25 @@ def repeated_array(arr, num, axes = -1):
             composite = np.concatenate(tuple(repeat(composite, times = n)), axis = ax)
     
     return composite
+
+def complex_array(real, imag):
+    """
+    Combine two real ndarrays into a complex array.
+
+    Parameters
+    ----------
+    real, imag : array_like
+        Real and imaginary parts of a complex array.
+    
+    Returns
+    -------
+    complex : `~numpy.ndarray`
+        Complex array.
+    """
+    real, imag = np.asfarray(real), np.asfarray(imag)
+    comp = real.astype(np.complex)
+    comp += 1j*imag
+    return comp
 
 def mirror(arr, axes = None):
     """ 

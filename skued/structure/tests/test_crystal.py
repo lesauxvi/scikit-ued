@@ -1,20 +1,26 @@
 # -*- coding: utf-8 -*-
-from math import radians
-from copy import deepcopy, copy
-from random import choice, seed
-from itertools import permutations
-import numpy as np
-from .. import Crystal, Atom, Lattice, graphite
-from ... import rotation_matrix, transform
+import pickle
 import unittest
+from copy import copy, deepcopy
+from itertools import permutations
+from math import radians
+from os.path import join, isdir
+from random import choice, seed
+from tempfile import TemporaryDirectory
+
+import numpy as np
+
+from .. import Atom, Crystal, Lattice
+from ... import rotation_matrix, transform
 
 #seed(23)
 
 try:
     import ase
-    ASE = True
 except ImportError:
     ASE = False
+else:
+    ASE = True
 
 @unittest.skipIf(not ASE, 'ASE not importable')
 class TestAseAtoms(unittest.TestCase):
@@ -38,17 +44,6 @@ class TestAseAtoms(unittest.TestCase):
         # self.assertSetEqual(set(self.crystal), set(crystal2))
         self.assertEqual(len(self.crystal), len(crystal2))
 
-class TestCrystalMethods(unittest.TestCase):
-
-    def setUp(self):
-        name = choice(list(Crystal.builtins))
-        self.crystal = Crystal.from_database(name)
-    
-    def test_array(self):
-        """ Test Crystal.__array__ """
-        arr = np.array(self.crystal)
-        self.assertSequenceEqual(arr.shape, (len(self.crystal), 4))
-
 class TestSpglibMethods(unittest.TestCase):
     
     def test_spacegroup_info_graphite(self):
@@ -65,37 +60,22 @@ class TestSpglibMethods(unittest.TestCase):
         
         self.assertDictEqual(info, supposed)
     
-    def test_primitive(self):
+    def test_primitive_for_builtins(self):
         """ Test that all built-in crystal have a primitive cell """
         for name in Crystal.builtins:
             with self.subTest(name):
                 c = Crystal.from_database(name)
                 prim = c.primitive(symprec = 0.1)
                 self.assertLessEqual(len(prim), len(c))
-
-class TestSpglibMethods(unittest.TestCase):
     
-    def test_spacegroup_info_graphite(self):
-        """ Test that Crystal.spacegroup_info() works correctly for graphite """
-        c = Crystal.from_database('C')
-        info = c.spacegroup_info()
-        
-        supposed = {'international_number': 194, 
-                    'hall_number': 488,
-                    'international_symbol': 'P6_3/mmc',
-                    'international_full': 'P 6_3/m 2/m 2/c' ,
-                    'hall_symbol': '-P 6c 2c',
-                    'pointgroup': 'D6h'}
-        
-        self.assertDictEqual(info, supposed)
-    
-    def test_primitive(self):
-        """ Test that all built-in crystal have a primitive cell """
+    def test_primitive_uniqueness(self):
+        """ Test that the primitive cell of a primitive cell is itself """
         for name in Crystal.builtins:
             with self.subTest(name):
                 c = Crystal.from_database(name)
                 prim = c.primitive(symprec = 0.1)
-                self.assertLessEqual(len(prim), len(c))
+                prim2 = prim.primitive(symprec = 0.1)
+                self.assertIs(prim, prim2)
 
 class TestCrystalRotations(unittest.TestCase):
 
@@ -172,7 +152,15 @@ class TestCrystalConstructors(unittest.TestCase):
         c = Crystal.from_cod(1521124, download_dir = 'test_cache')
         c2 = Crystal.from_cod(1521124, revision = 176429, download_dir = 'test_cache')
 
-        self.assertSetEqual(set(c), set(c2))
+        self.assertEqual(c, c2)     
+
+    def test_from_cod_new_dir(self):     
+        """ Test that a cache dir is created by Crystal.from_cod """
+        with TemporaryDirectory() as temp_dir:
+            download_dir = join(temp_dir, 'test_cod')
+            self.assertFalse(isdir(download_dir))
+            c = Crystal.from_cod(1521124, download_dir = download_dir)
+            self.assertTrue(isdir(download_dir))
 
 if __name__ == '__main__':
     unittest.main()

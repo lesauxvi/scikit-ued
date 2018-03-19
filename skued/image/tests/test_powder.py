@@ -2,6 +2,7 @@
 
 import numpy as np
 from .. import azimuthal_average, powder_center
+from ... import Crystal, powdersim
 import unittest
 
 from skimage.filters import gaussian
@@ -135,11 +136,21 @@ class TestAzimuthalAverage(unittest.TestCase):
         mask[rr < 20] = True
         #image[rr < 20] = 0
 
-        radius, intensity = azimuthal_average(image, center)
+        radius, intensity = azimuthal_average(image, center, mask = mask, trim = False)
         self.assertEqual(radius.min(), 0)
 
-        radius_trimmed, intensity_trimmed = azimuthal_average(image, center, mask = mask)
+        radius_trimmed, intensity_trimmed = azimuthal_average(image, center, mask = mask, trim = True)
         self.assertEqual(radius_trimmed.min(), 20)
+    
+    def test_mask_and_nan(self):
+        """ Test that azimuthal_average with masks does not yield NaNs. This can happen for large masks. """
+        image = np.ones(shape = (256, 256), dtype = np.int16)
+        mask = np.zeros_like(image, dtype = np.bool)
+        mask[100:156, 100:156] = True
+        _, av = azimuthal_average(image, center = (128, 128), mask = mask, trim = False)
+
+        self.assertFalse(np.any(np.isnan(av)))
+
 
 if __name__ == '__main__':
     unittest.main()

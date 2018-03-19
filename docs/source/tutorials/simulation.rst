@@ -26,8 +26,9 @@ scattering angles `s` as :math:`s = \sin{\theta}/\lambda`::
 	
 	import matplotlib.pyplot as plt
 	import numpy as np
-	from skued.structure import graphite
-	from skued.simulation import powdersim
+	from skued import powdersim
+	from skued import Crystal
+	graphite = Crystal.from_database('C')
 
 	s = np.linspace(0.1, 0.8, 1000)
 	diff = powdersim(crystal = graphite, scattering_length = s)
@@ -41,14 +42,15 @@ After plot formatting:
 	
 	import matplotlib.pyplot as plt
 	import numpy as np
-	from skued.structure import graphite
-	from skued.simulation import powdersim
+	from skued import Crystal
+	graphite = Crystal.from_database('C')
+	from skued import powdersim
 	s = np.linspace(0.1, 0.8, 1000)
 	diff = powdersim(crystal = graphite, scattering_length = s)
 	plt.figure()
 	plt.plot(s, diff/diff.max())
 	plt.xlim([s.min(), s.max()])
-	plt.xlabel('$s = \sin{\theta}/\lambda$')
+	plt.xlabel('$s = \sin{\\theta}/\lambda$')
 	plt.ylabel('Diffracted intensity (A.u.)')
 	plt.title('Polycrystalline graphite diffraction')
 
@@ -63,7 +65,7 @@ To compute the electrostatic potential for an infinite crystal on an arbitrary 3
 take a look at :func:`electrostatic`::
 
     from skued import Crystal
-    from skued.simulation import electrostatic
+    from skued import electrostatic
 
     graphite = Crystal.from_database('C')
 
@@ -74,11 +76,11 @@ take a look at :func:`electrostatic`::
 Another possibility is to calculate the electrostatic potential for an infinite slab in the 
 x-y plane, but finite in z-direction, using :func:`pelectrostatic` (p for projected)::
 
-    from skued.simulation import pelectrostatic
+    from skued import pelectrostatic
 
     extent = np.linspace(-5, 5, 256)
     xx, yy= np.meshgrid(extent, extent)
-    potential = electrostatic(graphite, xx, yy)
+    potential = pelectrostatic(graphite, xx, yy)
 
 After plot formatting:
 
@@ -87,7 +89,7 @@ After plot formatting:
     import matplotlib.pyplot as plt
     import numpy as np
     from skued import Crystal
-    from skued.simulation import pelectrostatic
+    from skued import pelectrostatic
 
     extent = np.linspace(-5, 5, 256)
     xx, yy = np.meshgrid(extent, extent)

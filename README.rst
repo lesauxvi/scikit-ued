@@ -14,12 +14,12 @@ scikit-ued
 Collection of algorithms and functions for ultrafast electron diffraction. It aims to be a fully-tested package
 taking advantage of Python's most recent features.
 
-For examples, see our `tutorials <http://scikit-ued.readthedocs.io/en/latest/tutorials/index.html>`_.
+For examples, see our `tutorials <https://scikit-ued.readthedocs.io/en/latest/tutorials/index.html>`_.
 
 API Reference
 -------------
 
-The `API Reference on readthedocs.io <http://scikit-ued.readthedocs.io>`_ provides API-level documentation, as 
+The `API Reference on readthedocs.io <https://scikit-ued.readthedocs.io>`_ provides API-level documentation, as 
 well as tutorials.
 
 Installation
@@ -36,6 +36,9 @@ To install the latest development version from `Github <https://github.com/Laure
 Each version is tested against Python 3.5 and 3.6. If you are using a different version, tests can be run
 using the standard library's `unittest` module.
 
+Dependencies for scikit-ued (e.g. ``spglib``) require compilation. Windows users should 
+minimally have the `Visual Studio Build Tools <https://www.visualstudio.com/downloads/>`_ installed.
+
 After installing scikit-ued you can use it like any other Python module as ``skued``.
 
 Optional dependencies
@@ -43,6 +46,8 @@ Optional dependencies
 
 While it is not strictly required, the fourier transform routines from ``pyfftw`` will be preferred If
 ``pyfftw`` is installed.
+
+For displaying diffraction images using the ``skued.diffshow`` function, PyQtGraph and PyQt5 are both required.
 
 Related projects
 ----------------

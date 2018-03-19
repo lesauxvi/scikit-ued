@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 
 from functools import lru_cache
+
 import numpy as np
 
-from .. import (change_of_basis, transform)
+from .. import change_of_basis, transform
 from .atom_data import (ELEM_TO_MAGMOM, ELEM_TO_MASS, ELEM_TO_NAME,
                         ELEM_TO_NUM, NUM_TO_ELEM)
 from .lattice import Lattice
-# Constants
-m = 9.109*10**(-31)     #in kg
-a0 = 0.5291             #in Angs
+
 
 def real_coords(frac_coords, lattice_vectors):
     """
@@ -82,9 +81,9 @@ class Atom(object):
         self.magmom = magmom
         
     def __repr__(self):
-        name = ELEM_TO_NAME[self.element]
-        return "< {} atom at coordinates ({:.3f}, {:.3f}, {:.3f}) >".format(ELEM_TO_NAME[self.element], *tuple(self.coords))
+        return "< Atom {:<2} @ ({:.2f}, {:.2f}, {:.2f}) >".format(self.element, *tuple(self.coords))
     
+    # TODO: add `distance_from` function for atoms on a lattice
     def __sub__(self, other):
         return np.linalg.norm(self.coords - other.coords)
     
@@ -156,8 +155,7 @@ class Atom(object):
                     magmom = self.magmom,
                     mass = self.mass, **kwargs)
 
-    # TODO: make lattices hashable to this can be cached.
-    #       but how can a Crystal be efficiently hashed? e.g. 20000 atoms...
+    @lru_cache()
     def xyz(self, lattice):
         """ 
         Real-space position of the atom
@@ -165,17 +163,14 @@ class Atom(object):
         Parameters
         ----------
         lattice : Lattice or iterable
-            Lattice or Crystal instance in which the atom is located, or iterable
-            from which a Lattice object can be instantiated.  
+            Lattice or Crystal instance in which the atom is located.
                     
         Returns
         -------
         pos : `~numpy.ndarray`, shape (3,)
             Atomic position
         """
-        if isinstance(lattice, Lattice):
-            return self.xyz(lattice.lattice_vectors)
-        return real_coords(self.coords, lattice)
+        return real_coords(self.coords, lattice.lattice_vectors)
     
     def debye_waller_factor(self, G, out = None):
         """

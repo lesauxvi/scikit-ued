@@ -1,18 +1,19 @@
 # -*- coding: utf-8 -*-
-import os
 from copy import deepcopy as copy
 from functools import lru_cache
 from glob import glob
+from os import mkdir
+from os.path import basename, dirname, isdir, isfile, join
 from urllib.request import urlretrieve
 
 import numpy as np
-from spglib import (get_error_message, get_spacegroup_type, 
-                    get_symmetry_dataset, find_primitive)
+from spglib import (find_primitive, get_error_message, get_spacegroup_type,
+                    get_symmetry_dataset)
 
-from . import Atom, CIFParser, Lattice, PDBParser
+from . import Atom, AtomicStructure, CIFParser, Lattice, PDBParser
 from .. import affine_map
 
-CIF_ENTRIES = glob(os.path.join(os.path.dirname(__file__), 'cifs', '*.cif'))
+CIF_ENTRIES = glob(join(dirname(__file__), 'cifs', '*.cif'))
 
 def symmetry_expansion(atoms, symmetry_operators):
     """
@@ -43,10 +44,10 @@ def symmetry_expansion(atoms, symmetry_operators):
             uniques.add(new)
     yield from uniques
 
-class Crystal(Lattice):
+class Crystal(AtomicStructure, Lattice):
     """
-    This object is the basis for inorganic crystals such as VO2, 
-    and protein crystals such as bR. 
+    :class:`Crystal` instances represent crystalline matter. They are set-like objects
+    that can be iterated over. 
 
     In addition to constructing the ``Crystal`` object yourself, other constructors
     are also available (and preferred):
@@ -61,47 +62,40 @@ class Crystal(Lattice):
 
     * ``Crystal.from_ase``: create an instance from an ``ase.Atoms`` instance.
 
+    :class:`Crystal` instances are picklable as well.
+
     Parameters
     ----------
     unitcell : iterable of ``Atom``
         Unit cell atoms. It is assumed that the atoms are in fractional coordinates.
     lattice_vectors : iterable of array_like
-        Lattice vectors.
+        Lattice vectors. If ``lattice_vectors`` is provided as a 3x3 array, it 
+        is assumed that each lattice vector is a row.
     source : str or None, optional
         Provenance, e.g. filename.
     """
 
-    builtins = frozenset(map(lambda fn: os.path.basename(fn).split('.')[0], CIF_ENTRIES))
+    builtins = frozenset(map(lambda fn: basename(fn).split('.')[0], CIF_ENTRIES))
 
     def __init__(self, unitcell, lattice_vectors, source = None, **kwargs):
-        self.unitcell = frozenset(unitcell)
+        super().__init__(atoms = unitcell, lattice_vectors = lattice_vectors, **kwargs)
         self.source = source
-        super().__init__(lattice_vectors, **kwargs)
-    
-    def __iter__(self):
-        yield from iter(self.unitcell)
-    
-    def __len__(self):
-        return len(self.unitcell)
     
     def __repr__(self):
-        return '< Crystal object with unit cell of {} atoms >'.format(len(self))
-    
-    def __eq__(self, other):
-        return (isinstance(other, self.__class__) 
-                and (set(self) == set(other))
-                and super().__eq__(other))
-    
-    def __array__(self):
-        """ Returns an array in which each row represents a unit cell atom """
-        arr = np.empty(shape = (len(self), 4), dtype = np.float)
-        for row, atm in enumerate(self):
-            arr[row, 0] = atm.atomic_number
-            arr[row, 1:] = atm.coords
-        return arr
+        """ Verbose string representation of this instance. """
+        # Note : Crystal subclasses need not override this method
+        # since the class name is dynamically determined
+        rep = '< {clsname} object with following unit cell:'.format(clsname = self.__class__.__name__)
+
+        # Note that repr(Atom(...)) includes these '< ... >'
+        # We remove those for cleaner string representation
+        for atm in self.itersorted():
+            rep += '\n    ' + repr(atm).replace('<', '').replace('>', '').strip()
+
+        return rep + '\nSource: \n    {} >'.format(self.source or 'N/A')
 
     @classmethod
-    @lru_cache(maxsize = len(builtins)) # saves a lot of time in tests
+    @lru_cache(maxsize = len(builtins), typed = True) # saves a lot of time in tests
     def from_cif(cls, path):
         """
         Returns a Crystal object created from a CIF 1.0, 1.1 or 2.0 file.
@@ -135,7 +129,7 @@ class Crystal(Lattice):
             raise ValueError('Entry {} is not available in the database. See \
                               Crystal.builtins for valid entries.'.format(name))
         
-        path = os.path.join(os.path.dirname(__file__), 'cifs', name + '.cif')
+        path = join(dirname(__file__), 'cifs', name + '.cif')
         return cls.from_cif(path)
     
     @classmethod
@@ -158,8 +152,8 @@ class Crystal(Lattice):
         if revision is None:
             overwrite = True
         
-        if not os.path.isdir(download_dir):
-            os.mkdir(download_dir)
+        if not isdir(download_dir):
+            mkdir(download_dir)
         
         url = 'http://www.crystallography.net/cod/{}.cif'.format(num)
 
@@ -168,9 +162,9 @@ class Crystal(Lattice):
             base = '{iden}-{rev}.cif'.format(iden = num, rev = revision)
         else:
             base = '{}.cif'.format(num)
-        path = os.path.join(download_dir, base)
+        path = join(download_dir, base)
 
-        if (not os.path.isfile(path)) or overwrite:
+        if (not isfile(path)) or overwrite:
             urlretrieve(url, path)
         
         return cls.from_cif(path)
@@ -191,10 +185,10 @@ class Crystal(Lattice):
             Whether or not to overwrite files in cache if they exist. If no revision 
             number is provided, files will always be overwritten. 
         """
-        parser = PDBParser(ID = ID, download_dir = download_dir)
-        return cls(unitcell = symmetry_expansion(parser.atoms(), parser.symmetry_operators()),
-                   lattice_vectors = parser.lattice_vectors(),
-                   source = str(parser.file))
+        with PDBParser(ID = ID, download_dir = download_dir) as parser:
+            return cls(unitcell = symmetry_expansion(parser.atoms(), parser.symmetry_operators()),
+                       lattice_vectors = parser.lattice_vectors(),
+                       source = parser.filename)
     
     @classmethod
     def from_ase(cls, atoms):
@@ -210,6 +204,38 @@ class Crystal(Lattice):
         
         return cls(unitcell = [Atom.from_ase(atm) for atm in atoms], 
                    lattice_vectors = lattice_vectors)
+    
+    # TODO: test against known XYZ file
+    def write_xyz(self, fname, comment = None):
+        """
+        Generate an atomic coordinates .xyz file from a crystal structure.
+
+        Parameters
+        ----------
+        fname : path-like
+            The XYZ file will be written to this file. If the file already exists,
+            it will be overwritten.
+        comment : str or None, optional
+            Comment to include at the second line of ``fname``.
+        """
+        # Format is specified here:
+        #   http://openbabel.org/wiki/XYZ_%28format%29
+        comment = comment or ''
+        atom_format_str = '  {:<2}       {:10.5f}       {:10.5f}       {:10.5f}'
+
+        with open(fname, 'wt', encoding = 'ascii') as file:
+            # First two lines are:
+            #   1. Number of atoms described in the file
+            #   2. Optional comment
+            file.write(str(len(self)) + '\n')
+            file.write(comment + '\n')
+
+            # Write atomic data row-by-row
+            # For easier human readability, atoms are sorted
+            # by element
+            for atom in self.itersorted():
+                row = atom_format_str.format(atom.element, *atom.xyz(self))
+                file.write(row + '\n')
 
     def _spglib_cell(self):
         """ Returns an array in spglib's cell format. """
@@ -249,9 +275,7 @@ class Crystal(Lattice):
         if numbers.size == len(self):   # Then there's no point in creating a new crystal
             return self
 
-        atoms = list()
-        for coords, Z in zip(scaled_positions, numbers):
-            atoms.append(Atom(int(Z), coords = coords))
+        atoms = [Atom(int(Z), coords = coords) for Z, coords in zip(numbers, scaled_positions)]
 
         return Crystal(unitcell = atoms, 
                        lattice_vectors = lattice_vectors, 
@@ -328,18 +352,19 @@ class Crystal(Lattice):
                                        angle_tolerance = angle_tolerance)
 
         if dataset: 
-            info = dict()
-            info.update( {'international_symbol': dataset['international'],
-                          'hall_symbol': dataset['hall'],
-                          'international_number': dataset['number'],
-                          'hall_number': dataset['hall_number']} )
+            spg_type = get_spacegroup_type(dataset['hall_number'])
+
+            info = {'international_symbol': dataset['international'],
+                    'hall_symbol'         : dataset['hall'],
+                    'international_number': dataset['number'],
+                    'hall_number'         : dataset['hall_number'],
+                    'international_full'  : spg_type['international_full'],
+                    'pointgroup'          : spg_type['pointgroup_international']} 
+
+            err_msg = get_error_message()
+            if (err_msg != 'no error'):
+                raise RuntimeError('Symmetry-determination has returned the following error: {}'.format(err_msg))
             
-            spg_type = get_spacegroup_type(info['hall_number'])
-            info.update( {'international_full': spg_type['international_full'],
-                          'pointgroup': spg_type['pointgroup_international']} )
-
             return info
-
-        err_msg = get_error_message()
-        if err_msg:
-            raise RuntimeError('Symmetry-determination has returned the following error: {}'.format(err_msg))
+        
+        return None

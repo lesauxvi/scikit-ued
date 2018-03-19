@@ -17,9 +17,10 @@ import numpy as np
 from CifFile import ReadCif, get_number_with_esd
 from numpy.linalg import inv
 
-from . import Atom, frac_coords, lattice_vectors_from_parameters, ParseError
+from . import Atom, Lattice, ParseError, frac_coords
 from .. import affine_map, transform
 from .spg_data import HM2Hall, Number2Hall, SymOpsHall
+
 
 def sym_ops(equiv_site):
     """ Parse a symmetry operator from an equivalent-site representation 
@@ -64,7 +65,7 @@ def sym_ops(equiv_site):
     symmetry_operation[:3,3] = translation
     return symmetry_operation
 
-class CIFParser(object):
+class CIFParser:
     """
     Collection of methods that parses CIF files based on cif2cell. The preferred method
     of using this object is as a context manager.
@@ -84,21 +85,29 @@ class CIFParser(object):
         # Therefore, more clear to pass an open file
         self._handle = open(filename, mode = 'r')
         self.file = ReadCif(self._handle, **kwargs)
-
+    
     def __enter__(self):
         return self
-    
-    def __exit__(self, type, value, traceback):
-        self._handle.close()
 
+    def __exit__(self, *args, **kwargs):
+        self._handle.close()
+    
     @property
-    def _first_block(self):
-        return self.file[self.file.keys()[0]]
+    def structure_block(self):
+        """ Retrieve which CIF block has the appropriate structural information """
+        blocks = (self.file[key] for key in self.file.keys())
+        for block in blocks:
+            try:
+                a, _ = get_number_with_esd(block["_cell_length_a"])
+            except:
+                continue
+            else:
+                return block
     
     @lru_cache(maxsize = 1)
     def hall_symbol(self):
         """ Returns the Hall symbol """
-        block = self._first_block
+        block = self.structure_block
 
         hall_symbol = block.get('_symmetry_space_group_name_Hall') or block.get('_space_group_name_Hall')
 
@@ -110,7 +119,8 @@ class CIFParser(object):
             
             if h_m_symbol is not None:
                 h_m_symbol = sub('\s+', '', h_m_symbol)
-                hall_symbol =  HM2Hall[h_m_symbol]
+                with suppress(KeyError):    # Symbol could be meaningless, e.g. h_m_symbol = '?' (True story)
+                    hall_symbol =  HM2Hall[h_m_symbol]
         
         # Again, if hall_symbol is still missing OR invalid
         if (hall_symbol is None) or (hall_symbol not in SymOpsHall):
@@ -141,7 +151,7 @@ class CIFParser(object):
         alpha, beta, gamma : float
             Angles of lattice vectors [degrees]. 
         """
-        block = self._first_block
+        block = self.structure_block
 
         try:
             a, _ = get_number_with_esd(block["_cell_length_a"])
@@ -152,8 +162,8 @@ class CIFParser(object):
             gamma, _ = get_number_with_esd(block["_cell_angle_gamma"])
         except:
             raise ParseError('Lattice vectors could not be determined.')
-
-        return a, b, c, alpha, beta, gamma
+        else:
+            return a, b, c, alpha, beta, gamma
 
     @lru_cache(maxsize = 1)
     def lattice_vectors(self):
@@ -164,7 +174,7 @@ class CIFParser(object):
         -------
         lv : list of ndarrays, shape (3,)
         """
-        return lattice_vectors_from_parameters(*self.lattice_parameters())
+        return Lattice.from_parameters(*self.lattice_parameters()).lattice_vectors
     
     def symmetry_operators(self):
         """
@@ -177,7 +187,7 @@ class CIFParser(object):
             Transformation matrices. Since translations and rotation are combined,
             the transformation matrices are 4x4.
         """
-        block = self._first_block
+        block = self.structure_block
 
         equivalent_sites_str = None
         for tag in ['_symmetry_equiv_pos_as_xyz','_space_group_symop_operation_xyz']:
@@ -188,10 +198,11 @@ class CIFParser(object):
         if isinstance(equivalent_sites_str, str):
             equivalent_sites_str = [equivalent_sites_str]
 
-        if not equivalent_sites_str:
-            equivalent_sites_str = SymOpsHall[self.hall_symbol()]
-        elif len(equivalent_sites_str) != len(SymOpsHall[self.hall_symbol()]):
-            warnings.warn('The number of equivalent sites is not in line with the database. The file might be incomplete')
+        with suppress(ParseError):
+            if not equivalent_sites_str:
+                equivalent_sites_str = SymOpsHall[self.hall_symbol()]
+            elif len(equivalent_sites_str) != len(SymOpsHall[self.hall_symbol()]):
+                warnings.warn('The number of equivalent sites is not in line with the database. The file might be incomplete')
 
         yield from map(sym_ops, equivalent_sites_str)
     
@@ -203,7 +214,7 @@ class CIFParser(object):
         ------
         atoms : skued.Atom instance
         """
-        block = self._first_block
+        block = self.structure_block
 
         try:
             tmpdata = block.GetLoop('_atom_site_fract_x')

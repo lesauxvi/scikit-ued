@@ -23,6 +23,43 @@ Please refer to the :ref:`tutorial on baseline-determination <baseline_tutorial>
     dtcwt
     idtcwt
 
+====================
+Time-series Analysis
+====================
+
+Time-series exploration and analysis.
+
+Time-zero tracking
+------------------
+
+Measurement of time-shifts between physically-equivalent time traces:
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    time_shift
+    time_shifts
+
+Robust statistics
+-----------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    mad
+
+Non-uniform Fast Fourier Transform
+----------------------------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    nfft
+    nfftfreq
+
 ==============
 Image Analysis
 ==============
@@ -32,27 +69,79 @@ Combine the routines below with
 to the :ref:`tutorial on image manipulation <image_analysis_tutorial>` 
 for some examples.
 
+Symmetry
+--------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    nfold
+
+Polycrystalline diffraction
+---------------------------
+
 .. autosummary::
     :toctree: functions/
     :nosignatures:
 
     azimuthal_average
     powder_center
+
+Calibrations
+------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+    
+    powder_calq
+
+Image alignment
+---------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
     align
     ialign
     diff_register
     shift_image
-    nfold
+    itrack_peak
+
+Correlations
+------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+    
+    xcorr
     mnxc2
+
+Image masking
+-------------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
     mask_from_collection
     combine_masks
     mask_image
+
+Image noise
+-----------
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
     snr_from_collection
     isnr
     triml
     trimr
-    
-=================
 Crystal structure
 =================
 Handling crystal structure information is crucial for many data analysis and modelling tasks.
@@ -78,6 +167,8 @@ Dataset Handling
     AbstractRawDataset
     McGillRawDataset
 
+=======
+
 ==========
 Simulation
 ==========
@@ -92,6 +183,31 @@ Simulation
     electrostatic
     pelectrostatic
     bounded_reflections
+
+============
+Input/Output
+============
+
+General diffraction image I/O and plotting. Note that
+for :func:`diffshow`, the packages PyQtGraph and PyQt5 must be
+installed.
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    diffread
+    diffshow
+
+Merlin Image Binary (.mib) files:
+
+.. autosummary::
+    :toctree: functions/
+    :nosignatures:
+
+    mibheader
+    mibread
+    imibread
 
 ==============
 Plot Utilities

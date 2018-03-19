@@ -6,7 +6,8 @@ from urllib.request import urlretrieve
 
 import numpy as np
 
-from . import Atom, frac_coords, lattice_vectors_from_parameters, ParseError
+from . import Atom, Lattice, ParseError, frac_coords
+
 
 def retrieve_pdb_file(pdb_code, download_dir = None, server = 'ftp://ftp.wwpdb.org', overwrite = False):
     """ 
@@ -61,9 +62,9 @@ def retrieve_pdb_file(pdb_code, download_dir = None, server = 'ftp://ftp.wwpdb.o
 
     return final_file
 
-class PDBParser(object):
+class PDBParser:
     """
-    Collection of methods that parses PDB files. Insipred from BioPython.PDB module.
+    Collection of methods that parses PDB files. This object should be used as a context manager.
     
     Parameters
     ----------
@@ -78,8 +79,19 @@ class PDBParser(object):
     """
 
     def __init__(self, ID, download_dir = 'pdb_cache', overwrite = False):
-        self.file = retrieve_pdb_file(pdb_code = ID, download_dir = download_dir, 
-                                      overwrite = overwrite)
+        filename = retrieve_pdb_file(pdb_code = ID, download_dir = download_dir, 
+                                     overwrite = overwrite)
+        self._handle = open(filename, 'r')
+    
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, *args, **kwargs):
+        self._handle.close()
+    
+    @property
+    def filename(self):
+        return self._handle.name
 
     @lru_cache(maxsize = 1)
     def lattice_vectors(self):
@@ -95,17 +107,17 @@ class PDBParser(object):
         ParseError
             If the file does not contain a CRYST1 tag.
         """
-        with open(self.file) as pdb_file:
-            for line in pdb_file:
-                if line.startswith('CRYST1'):
-                    # characters are described in the PDB file content guide.
-                    a, b, c = float(line[6:15]), float(line[15:24]), float(line[24:33])
-                    alpha, beta, gamma = float(line[33:40]), float(line[40:47]), float(line[47:54])
-                    break
-            else:
-                raise ParseError('No CRYST1 line found')
+        self._handle.seek(0)
 
-        return lattice_vectors_from_parameters(a, b, c, alpha, beta, gamma)
+        for line in filter(lambda l: l.startswith('CRYST1'), self._handle):
+            # characters are described in the PDB file content guide.
+            a, b, c = float(line[6:15]), float(line[15:24]), float(line[24:33])
+            alpha, beta, gamma = float(line[33:40]), float(line[40:47]), float(line[47:54])
+            break
+        else:
+            raise ParseError('No CRYST1 line found')
+
+        return Lattice.from_parameters(a, b, c, alpha, beta, gamma).lattice_vectors
     
     def atoms(self):
         """
@@ -115,12 +127,13 @@ class PDBParser(object):
         ------
         atom: skued.structure.Atom
         """
+        self._handle.seek(0)
+
         atoms = list()
-        with open(self.file) as pdb_file:
-            for line in filter(lambda l: l.startswith( ('ATOM', 'HEMATM') ), pdb_file):
-                x, y, z = float(line[30:38]), float(line[38:46]), float(line[46:54])
-                element = str(line[76:78]).replace(' ','')
-                yield Atom(element = element, coords = frac_coords(np.array([x,y,z]), self.lattice_vectors()))
+        for line in filter(lambda l: l.startswith( ('ATOM', 'HEMATM') ), self._handle):
+            x, y, z = float(line[30:38]), float(line[38:46]), float(line[46:54])
+            element = str(line[76:78]).replace(' ','')
+            yield Atom(element = element, coords = frac_coords(np.array([x,y,z]), self.lattice_vectors()))
     
     def symmetry_operators(self):
         """
@@ -133,21 +146,22 @@ class PDBParser(object):
             Transformation matrices. Since translations and rotation are combined,
             the transformation matrices are 4x4.
         """
+        self._handle.seek(0)
+
         # This is clunky af
         sym_ops = dict()
-        with open(self.file) as pdb_file:
-            for line in filter(lambda l: l.startswith('REMARK 290') and ('SMTRY' in l), pdb_file):
+        for line in filter(lambda l: l.startswith('REMARK 290') and ('SMTRY' in l), self._handle):
+            
+            op_num = line[22:23]
+            if op_num not in sym_ops:
+                sym_ops[op_num] = {'rotation': list(), 'translation': list()}
                 
-                op_num = line[22:23]
-                if op_num not in sym_ops:
-                    sym_ops[op_num] = {'rotation': list(), 'translation': list()}
-                    
-                r1, r2, r3, t = np.fromstring(line[23:], dtype = np.float, count = 4, sep = ' ')
-                sym_ops[op_num]['rotation'].append([r1,r2,r3])
-                sym_ops[op_num]['translation'].append(t)
+            r1, r2, r3, t = np.fromstring(line[23:], dtype = np.float, count = 4, sep = ' ')
+            sym_ops[op_num]['rotation'].append([r1,r2,r3])
+            sym_ops[op_num]['translation'].append(t)
 
         if not sym_ops:
-            raise ParseError('No symmetry could be parsed from file {}'.format(self.file))
+            raise ParseError('No symmetry could be parsed from file {}'.format(self._handle.filename))
         
         for op in sym_ops.values():
             mat = np.eye(4, dtype = np.float)
